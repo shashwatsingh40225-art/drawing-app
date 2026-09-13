@@ -9,7 +9,11 @@ import { SketchbookScreen } from './screens/SketchbookScreen';
 import { PersonalArtworkDetailScreen } from './screens/PersonalArtworkDetailScreen';
 import { ArtworkEditScreen } from './screens/ArtworkEditScreen';
 import { UploadScreen } from './screens/UploadScreen';
-import { DiscoveryFlow } from './screens/DiscoveryFlow';
+import { LibraryScreen } from './screens/LibraryScreen';
+import { BookDetailScreen } from './screens/BookDetailScreen';
+import { ReaderScreen } from './screens/ReaderScreen';
+import { ArchiveScreen } from './screens/ArchiveScreen';
+import { ArtRoomScreen } from './screens/ArtRoomScreen';
 
 export const router = createHashRouter([
   {
@@ -38,15 +42,30 @@ export const router = createHashRouter([
     children: [
       { index: true, element: <HomeScreen /> },
       { path: 'about', element: <AboutScreen /> },
-      { path: 'sketchbook', element: <SketchbookScreen /> },
-      { path: 'sketchbook/:id', element: <PersonalArtworkDetailScreen /> },
-      { path: 'sketchbook/:id/edit', element: <ArtworkEditScreen /> },
+      // My Art (renamed from /sketchbook)
+      { path: 'my-art', element: <SketchbookScreen /> },
+      { path: 'my-art/:id', element: <PersonalArtworkDetailScreen /> },
+      { path: 'my-art/:id/edit', element: <ArtworkEditScreen /> },
+      // Redirect old /sketchbook paths to /my-art
+      { path: 'sketchbook', element: <Navigate to="/my-art" replace /> },
+      { path: 'sketchbook/:id', element: <Navigate to="/my-art" replace /> },
+      { path: 'sketchbook/:id/edit', element: <Navigate to="/my-art" replace /> },
+      // Upload
       { path: 'upload', element: <UploadScreen /> },
-      { path: 'discover', element: <DiscoveryFlow /> },
-      { path: 'discover/processing', element: <DiscoveryFlow /> },
-      { path: 'discover/results', element: <DiscoveryFlow /> },
-      { path: 'discover/results/:id', element: <DiscoveryFlow /> },
-      { path: 'favorites', element: <DiscoveryFlow /> },
+      // My Library (PDF books)
+      { path: 'library', element: <LibraryScreen /> },
+      { path: 'library/:id', element: <BookDetailScreen /> },
+      // PDF Reader
+      { path: 'reader/:id', element: <ReaderScreen /> },
+      // Kin Archive
+      { path: 'archive', element: <ArchiveScreen /> },
+      // My Art Room
+      { path: 'art-room', element: <ArtRoomScreen /> },
+      // Redirect old /discover routes away
+      { path: 'discover', element: <Navigate to="/" replace /> },
+      { path: 'discover/*', element: <Navigate to="/" replace /> },
+      { path: 'favorites', element: <Navigate to="/" replace /> },
+      // Catch-all
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

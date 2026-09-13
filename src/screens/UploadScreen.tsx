@@ -202,9 +202,9 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
       });
 
       if (created) {
-        navigate(`/sketchbook/${created.id}`);
+        navigate(`/my-art/${created.id}`);
       } else {
-        navigate('/sketchbook');
+        navigate('/my-art');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
@@ -231,7 +231,7 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
         action={
           <button
             type="button"
-            onClick={() => navigate('/sketchbook')}
+            onClick={() => navigate('/my-art')}
             className="double-outline-btn"
             style={{
               padding: '8px 16px',
@@ -808,7 +808,7 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
               >
                 <button
                   type="button"
-                  onClick={() => navigate('/sketchbook')}
+                  onClick={() => navigate('/my-art')}
                   className="double-outline-btn"
                   style={{
                     padding: '10px 20px',
@@ -856,3 +856,5 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
     </div>
   );
 };
+
+

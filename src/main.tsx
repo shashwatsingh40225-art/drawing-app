@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './router';
 import { ToastContainer } from './components/ui/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import './lib/pdfWorker';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

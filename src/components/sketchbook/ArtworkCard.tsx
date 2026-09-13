@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Artwork, useArtworkStore } from '../../stores/artworkStore';
 import { ArtworkMat } from '../ui/ArtworkMat';
 import { Badge } from '../ui/Badge';
@@ -11,14 +11,10 @@ interface ArtworkCardProps {
 }
 
 export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
-  const navigate = useNavigate();
   const { toggleFavorite } = useArtworkStore();
 
-  const handleCardClick = () => {
-    navigate(`/sketchbook/${artwork.id}`);
-  };
-
   const handleStarClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     toggleFavorite(artwork.id);
   };
@@ -26,8 +22,8 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
   const displayImage = artwork.thumbnail_path || artwork.image_path || '/artist-reference/art-01.jpeg';
 
   return (
-    <div
-      onClick={handleCardClick}
+    <Link
+      to={`/my-art/${artwork.id}`}
       className="card-surface double-outline-card"
       style={{
         cursor: 'pointer',
@@ -40,7 +36,10 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
         boxShadow: 'var(--shadow-subtle)',
         transition: 'transform 200ms cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 150ms ease-in-out',
         position: 'relative',
+        textDecoration: 'none',
+        color: 'inherit',
       }}
+      aria-label={`View artwork: ${artwork.title}`}
     >
       {/* Artwork Mat Frame */}
       <div style={{ padding: '12px 12px 0 12px' }}>
@@ -120,6 +119,6 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
           </span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };

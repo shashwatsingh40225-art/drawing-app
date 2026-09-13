@@ -13,9 +13,13 @@ export function AppLayout() {
     initialize();
   }, [initialize]);
 
-  // Auth guard: Protect personal sketchbook & upload routes if not logged in
+  // Auth guard: Protect personal art, library, reader, art-room, and upload routes
   const isProtectedRoute = 
-    location.pathname.startsWith('/sketchbook') || 
+    location.pathname.startsWith('/my-art') ||
+    location.pathname.startsWith('/sketchbook') || // legacy redirect still protected
+    location.pathname.startsWith('/library') ||
+    location.pathname.startsWith('/reader') ||
+    location.pathname.startsWith('/art-room') ||
     location.pathname.startsWith('/upload');
 
   useEffect(() => {
@@ -90,21 +94,27 @@ export function AppLayout() {
             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--color-primary)' }}>
               Kin
             </span>
-            <span>· Personal Art Companion & Studio Sketchbook</span>
+            <span>· Personal Art Collection &amp; PDF Reader</span>
           </div>
 
           <div style={{ display: 'flex', gap: '16px' }}>
             <Link to="/about" style={{ color: 'inherit', textDecoration: 'underline' }}>
-              Studio Notes
+              About
             </Link>
-            <Link to="/sketchbook" style={{ color: 'inherit', textDecoration: 'underline' }}>
-              Sketchbook
+            <Link to="/my-art" style={{ color: 'inherit', textDecoration: 'underline' }}>
+              My Art
+            </Link>
+            <Link to="/library" style={{ color: 'inherit', textDecoration: 'underline' }}>
+              My Library
+            </Link>
+            <Link to="/archive" style={{ color: 'inherit', textDecoration: 'underline' }}>
+              Kin Archive
+            </Link>
+            <Link to="/art-room" style={{ color: 'inherit', textDecoration: 'underline' }}>
+              My Art Room
             </Link>
             <Link to="/upload" style={{ color: 'inherit', textDecoration: 'underline' }}>
               Upload Drawing
-            </Link>
-            <Link to="/discover" style={{ color: 'inherit', textDecoration: 'underline' }}>
-              Kin Discovery
             </Link>
           </div>
         </div>

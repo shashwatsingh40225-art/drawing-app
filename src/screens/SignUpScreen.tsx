@@ -33,7 +33,7 @@ export const SignUpScreen: React.FC = () => {
 
     const res = await signUp(email, password);
     if (!res.error) {
-      navigate('/sketchbook');
+      navigate('/my-art');
     }
   };
 
@@ -268,3 +268,4 @@ export const SignUpScreen: React.FC = () => {
     </div>
   );
 };
+

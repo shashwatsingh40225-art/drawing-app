@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useArtworkStore } from '../stores/artworkStore';
 import { useCollectionStore } from '../stores/collectionStore';
+import { useArtRoomStore } from '../stores/artRoomStore';
 import { useToastStore } from '../stores/toastStore';
 import { getImageUrl } from '../services/imageService';
 import { ArtworkMat } from '../components/ui/ArtworkMat';
@@ -17,7 +18,8 @@ import {
   Calendar, 
   Folder, 
   FileText,
-  Tag as TagIcon
+  Tag as TagIcon,
+  LayoutGrid
 } from 'lucide-react';
 
 export const PersonalArtworkDetailScreen: React.FC = () => {
@@ -55,7 +57,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
           headline="Drawing Not Found"
           description="This artwork may have been removed or does not exist in your sketchbook."
           actionLabel="Return to Sketchbook"
-          onAction={() => navigate('/sketchbook')}
+          onAction={() => navigate('/my-art')}
         />
       </div>
     );
@@ -70,7 +72,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
   const handleDelete = async () => {
     setShowDeleteConfirm(false);
     await softDeleteArtwork(artwork.id);
-    navigate('/sketchbook');
+    navigate('/my-art');
 
     showToast({
       type: 'info',
@@ -86,6 +88,33 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
     });
   };
 
+  const { addItem: addArtRoomItem } = useArtRoomStore();
+
+  const handleSendToArtRoom = async () => {
+    if (!artwork) return;
+    await addArtRoomItem({
+      type: 'artwork',
+      ref_artwork_id: artwork.id,
+      title: artwork.title,
+      thumbnail_url: displayImage,
+      x_percent: 40 + Math.floor(Math.random() * 8),
+      y_percent: 35 + Math.floor(Math.random() * 8),
+      width_percent: 25,
+      height_percent: 30,
+      rotation_degrees: Math.floor(Math.random() * 7) - 3,
+      z_index: 1,
+    });
+
+    showToast({
+      type: 'success',
+      message: `"${artwork.title}" pinned to Art Room!`,
+      action: {
+        label: 'Open Art Room',
+        onClick: () => navigate('/art-room'),
+      },
+    });
+  };
+
   return (
     <div
       style={{
@@ -97,7 +126,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
       {/* Back Navigation Bar */}
       <div style={{ marginBottom: '24px' }}>
         <button
-          onClick={() => navigate('/sketchbook')}
+          onClick={() => navigate('/my-art')}
           className="double-outline-btn"
           style={{
             display: 'inline-flex',
@@ -377,7 +406,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
             </button>
 
             <Link
-              to={`/sketchbook/${artwork.id}/edit`}
+              to={`/my-art/${artwork.id}/edit`}
               className="double-outline-btn"
               style={{
                 display: 'inline-flex',
@@ -397,6 +426,27 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
               <Edit3 size={15} />
               <span>Edit Details</span>
             </Link>
+
+            <button
+              onClick={handleSendToArtRoom}
+              className="double-outline-btn"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 18px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-text-primary)',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <LayoutGrid size={15} color="var(--color-accent)" />
+              <span>Pin to Art Room</span>
+            </button>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -435,3 +485,5 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
     </div>
   );
 };
+
+

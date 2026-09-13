@@ -4,14 +4,15 @@ import { EyeMark } from './EyeMark';
 import { useAuthStore } from '../stores/authStore';
 import { 
   BookOpen, 
-  Compass, 
+  Library,
   UploadCloud, 
   Palette, 
   LogOut, 
   User as UserIcon, 
   Menu, 
   X,
-  Sparkles
+  Archive,
+  LayoutDashboard,
 } from 'lucide-react';
 
 export type ScreenType = string;
@@ -52,8 +53,10 @@ export const Navigation: React.FC<NavigationProps> = () => {
   };
 
   const navLinks = [
-    { name: 'Sketchbook', path: '/sketchbook', icon: Palette },
-    { name: 'Discover', path: '/discover', icon: Compass },
+    { name: 'My Art', path: '/my-art', icon: Palette },
+    { name: 'My Library', path: '/library', icon: Library },
+    { name: 'Kin Archive', path: '/archive', icon: Archive },
+    { name: 'My Art Room', path: '/art-room', icon: LayoutDashboard },
     { name: 'About', path: '/about', icon: BookOpen },
   ];
 
@@ -130,7 +133,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '4px',
           }}
         >
           {navLinks.map((item) => {
@@ -144,9 +147,9 @@ export const Navigation: React.FC<NavigationProps> = () => {
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  padding: '8px 14px',
+                  padding: '8px 12px',
                   borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.9rem',
+                  fontSize: '0.88rem',
                   fontWeight: 500,
                   textDecoration: 'none',
                   color: active ? 'var(--color-primary)' : 'var(--color-text-secondary)',
@@ -155,7 +158,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
                   transition: 'all var(--transition-fast)',
                 }}
               >
-                <Icon size={16} color={active ? 'var(--color-accent)' : 'currentColor'} />
+                <Icon size={15} color={active ? 'var(--color-accent)' : 'currentColor'} />
                 <span>{item.name}</span>
               </Link>
             );
@@ -163,7 +166,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
         </nav>
 
         {/* Right Section: Upload CTA + User Profile / Login */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Link
             to="/upload"
             className="btn-primary double-outline-btn"
@@ -258,7 +261,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
                   </div>
 
                   <Link
-                    to="/sketchbook"
+                    to="/my-art"
                     onClick={() => setAvatarMenuOpen(false)}
                     style={{
                       display: 'flex',
@@ -271,7 +274,24 @@ export const Navigation: React.FC<NavigationProps> = () => {
                     }}
                   >
                     <Palette size={15} color="var(--color-secondary)" />
-                    <span>My Sketchbook</span>
+                    <span>My Art</span>
+                  </Link>
+
+                  <Link
+                    to="/library"
+                    onClick={() => setAvatarMenuOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      color: 'var(--color-text-primary)',
+                      textDecoration: 'none',
+                      fontSize: '0.88rem',
+                    }}
+                  >
+                    <Library size={15} color="var(--color-secondary)" />
+                    <span>My Library</span>
                   </Link>
 
                   <button
@@ -345,7 +365,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
             padding: '16px 24px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '8px',
           }}
         >
           {navLinks.map((item) => {
@@ -387,6 +407,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
                 color: 'var(--color-error)',
                 fontWeight: 500,
                 textAlign: 'left',
+                cursor: 'pointer',
               }}
             >
               <LogOut size={18} />

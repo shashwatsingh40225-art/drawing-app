@@ -3,14 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { 
   UploadCloud, 
   ArrowRight, 
-  Sparkles, 
-  Compass, 
-  Eye, 
   Palette, 
   Star, 
-  Folder 
+  Folder,
+  Library,
+  Archive,
+  BookOpen,
 } from 'lucide-react';
-import { SAMPLE_USER_DRAWINGS } from '../data/artworks';
 import { FeatherDivider } from '../components/FeatherDivider';
 import { useArtworkStore } from '../stores/artworkStore';
 import { useAuthStore } from '../stores/authStore';
@@ -21,13 +20,11 @@ import { EmptyState } from '../components/ui/EmptyState';
 
 interface HomeScreenProps {
   onStartUpload?: () => void;
-  onSelectSample?: (sample: typeof SAMPLE_USER_DRAWINGS[0]) => void;
   onExploreArchive?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onStartUpload,
-  onSelectSample,
   onExploreArchive,
 }) => {
   const navigate = useNavigate();
@@ -52,15 +49,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     if (onExploreArchive) {
       onExploreArchive();
     } else {
-      navigate('/sketchbook');
-    }
-  };
-
-  const handleSampleClick = (sample: typeof SAMPLE_USER_DRAWINGS[0]) => {
-    if (onSelectSample) {
-      onSelectSample(sample);
-    } else {
-      navigate('/discover');
+      navigate('/my-art');
     }
   };
 
@@ -148,8 +137,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                <Compass size={16} />
-                <span>Browse Sketchbook</span>
+                <Palette size={16} />
+                <span>Browse My Art</span>
               </button>
             </div>
           }
@@ -304,7 +293,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
 
             <Link
-              to="/sketchbook"
+              to="/my-art"
               className="double-outline-btn"
               style={{
                 display: 'inline-flex',
@@ -341,81 +330,145 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <FeatherDivider />
         </div>
 
-        {/* Quick Discovery Presets on Dashboard */}
+        {/* Quick Access Cards */}
         <section>
-          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <h2 style={{ fontSize: '1.6rem', marginBottom: '8px' }}>
-              Try Kinship Discovery
+          <div style={{ marginBottom: '20px' }}>
+            <h2
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.5rem',
+                fontWeight: 700,
+                color: 'var(--color-primary)',
+                margin: '0 0 8px 0',
+              }}
+            >
+              Quick Access
             </h2>
-            <p style={{ fontSize: '0.92rem', color: 'var(--color-text-secondary)', maxWidth: '580px', margin: '0 auto' }}>
-              Select a sketchbook drawing to trace line contours, hybrid traits, and chromatic registers against historical folios.
+            <p style={{ fontSize: '0.88rem', color: 'var(--color-text-secondary)', margin: 0 }}>
+              Jump to your library, the Kin Archive, or start a new upload.
             </p>
           </div>
 
-          <div 
+          <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '20px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px',
             }}
           >
-            {SAMPLE_USER_DRAWINGS.slice(0, 4).map((sample) => (
-              <div 
-                key={sample.id}
-                onClick={() => handleSampleClick(sample)}
-                className="art-card double-outline-card"
+            <Link
+              to="/library"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '20px',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-lg)',
+                textDecoration: 'none',
+                color: 'inherit',
+                boxShadow: 'var(--shadow-subtle)',
+                transition: 'transform 150ms ease',
+              }}
+              className="double-outline-card"
+            >
+              <div
                 style={{
-                  cursor: 'pointer',
-                  padding: '14px',
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'rgba(58, 33, 64, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
-                <div 
-                  style={{
-                    backgroundColor: '#FAF5EC',
-                    borderRadius: 'var(--radius-sm)',
-                    height: '170px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden',
-                    border: '1px solid rgba(222, 210, 188, 0.6)',
-                    marginBottom: '12px',
-                  }}
-                >
-                  <img 
-                    src={sample.image} 
-                    alt={sample.title} 
-                    className="artwork-img-blend"
-                    style={{
-                      maxHeight: '150px',
-                      width: 'auto',
-                      objectFit: 'contain',
-                    }}
-                  />
-                </div>
-
-                <h3 style={{ fontSize: '0.92rem', marginBottom: '4px' }}>
-                  {sample.title}
-                </h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>
-                  {sample.subtitle}
-                </p>
-
-                <div 
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
-                    color: 'var(--color-accent)',
-                  }}
-                >
-                  <span>Find Kin</span>
-                  <ArrowRight size={13} />
-                </div>
+                <Library size={24} color="var(--color-primary)" />
               </div>
-            ))}
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '2px' }}>My Library</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>Upload and read PDF books</div>
+              </div>
+              <ArrowRight size={16} color="var(--color-accent)" style={{ marginLeft: 'auto' }} />
+            </Link>
+
+            <Link
+              to="/archive"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '20px',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-lg)',
+                textDecoration: 'none',
+                color: 'inherit',
+                boxShadow: 'var(--shadow-subtle)',
+                transition: 'transform 150ms ease',
+              }}
+              className="double-outline-card"
+            >
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'rgba(180, 83, 31, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Archive size={24} color="var(--color-secondary)" />
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '2px' }}>Kin Archive</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>Browse 20 studio artworks</div>
+              </div>
+              <ArrowRight size={16} color="var(--color-accent)" style={{ marginLeft: 'auto' }} />
+            </Link>
+
+            <button
+              onClick={handleUploadClick}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                padding: '20px',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-lg)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                boxShadow: 'var(--shadow-subtle)',
+                transition: 'transform 150ms ease',
+              }}
+              className="double-outline-card"
+            >
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'rgba(214, 51, 122, 0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <UploadCloud size={24} color="var(--color-accent)" />
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '2px' }}>Upload Drawing</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>Add new artwork to My Art</div>
+              </div>
+              <ArrowRight size={16} color="var(--color-accent)" style={{ marginLeft: 'auto' }} />
+            </button>
           </div>
         </section>
       </div>
@@ -459,8 +512,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               marginBottom: '20px'
             }}
           >
-            <Sparkles size={14} />
-            <span>Artistic Kinship Engine</span>
+            <BookOpen size={14} />
+            <span>Private Art Studio</span>
           </div>
 
           {/* Primary Headline */}
@@ -472,7 +525,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               color: 'var(--color-primary)',
             }}
           >
-            Every drawing has kin.
+            Your private art home.
           </h1>
 
           {/* Subheadline */}
@@ -484,7 +537,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               marginBottom: '36px',
             }}
           >
-            Upload your sketch, ink study, or creature design. Our visual discovery engine traces line contours, anatomical hybridity, and color echoes to reveal kindred artworks across online archives.
+            Collect and revisit your drawings. Upload and read art-reference PDFs. Organise everything with tags, notes, and collections — all private, all yours.
           </p>
 
           {/* Primary CTA */}
@@ -503,8 +556,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               className="btn-secondary"
               style={{ padding: '13px 24px', fontSize: '0.98rem' }}
             >
-              <Compass size={18} />
-              <span>Browse Studio Kin</span>
+              <Palette size={18} />
+              <span>Browse My Art</span>
             </button>
           </div>
 
@@ -519,7 +572,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               color: 'var(--color-text-muted)'
             }}
           >
-            <Eye size={15} color="var(--color-secondary)" />
+            <BookOpen size={15} color="var(--color-secondary)" />
             <span>Private by default. Works with pencil, ink, markers, and digital studies.</span>
           </div>
         </div>
@@ -630,7 +683,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Tapering Feather Divider */}
       <FeatherDivider />
 
-      {/* Quick Try Presets Section */}
+      {/* Feature Highlights Section */}
       <section 
         style={{
           maxWidth: '1280px',
@@ -639,219 +692,39 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <h2 style={{ fontSize: '1.75rem', marginBottom: '8px' }}>
-            Try With a Sketchbook Drawing
-          </h2>
-          <p style={{ fontSize: '0.95rem', maxWidth: '600px', margin: '0 auto' }}>
-            Click any original drawing to experience how the similarity engine processes contours, textures, and anatomical kinship in real-time.
+          <h2 style={{ fontSize: '1.75rem', marginBottom: '8px' }}>Two studios in one</h2>
+          <p style={{ fontSize: '0.95rem', color: 'var(--color-text-secondary)', maxWidth: '520px', margin: '0 auto' }}>
+            Kin is a quiet companion for the working artist — no social features, no algorithms, no ads.
           </p>
         </div>
-
-        <div 
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '20px',
-          }}
-        >
-          {SAMPLE_USER_DRAWINGS.map((sample) => (
-            <div 
-              key={sample.id}
-              onClick={() => handleSampleClick(sample)}
-              className="art-card double-outline-card"
-              style={{
-                cursor: 'pointer',
-                padding: '14px',
-              }}
-            >
-              <div 
-                style={{
-                  backgroundColor: '#FAF5EC',
-                  borderRadius: 'var(--radius-sm)',
-                  height: '190px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(222, 210, 188, 0.6)',
-                  marginBottom: '12px',
-                }}
-              >
-                <img 
-                  src={sample.image} 
-                  alt={sample.title} 
-                  className="artwork-img-blend"
-                  style={{
-                    maxHeight: '170px',
-                    width: 'auto',
-                    objectFit: 'contain',
-                  }}
-                />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+          <Link to="/my-art" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="double-outline-card" style={{ padding: '28px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', height: '100%' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(58,33,64,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                <Palette size={28} color="var(--color-primary)" />
               </div>
-
-              <h3 style={{ fontSize: '0.95rem', marginBottom: '4px' }}>
-                {sample.title}
-              </h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
-                {sample.subtitle}
-              </p>
-
-              <div 
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: 'var(--color-accent)',
-                }}
-              >
-                <span>Find Kin</span>
-                <ArrowRight size={13} />
-              </div>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px', color: 'var(--color-primary)' }}>Personal Art Collection</h3>
+              <p style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: 0 }}>Upload drawings, paintings, and studies. Tag by medium, add notes and dates, organise into collections, and mark favourites. Your whole creative output, searchable and yours alone.</p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Thematic Pillars: How Kin Recognizes Artistry */}
-      <section 
-        style={{
-          backgroundColor: 'var(--color-surface)',
-          borderTop: '1px solid var(--color-border)',
-          borderBottom: '1px solid var(--color-border)',
-          padding: '60px 24px',
-        }}
-      >
-        <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: '44px' }}>
-            <h2 style={{ fontSize: '1.85rem', marginBottom: '8px' }}>
-              Four Dimensions of Artistic Kinship
-            </h2>
-            <p style={{ fontSize: '0.95rem', color: 'var(--color-text-secondary)' }}>
-              Unlike generic keyword or tag matchers, Kin analyzes the structural language of the hand.
-            </p>
-          </div>
-
-          <div 
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: '28px',
-            }}
-          >
-            {/* Dimension 1 */}
-            <div 
-              style={{
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '24px',
-              }}
-            >
-              <div 
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '1.25rem',
-                  color: 'var(--color-primary)',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ color: 'var(--color-secondary)' }}>01.</span>
-                <span>Contour & Line Weight</span>
+          </Link>
+          <Link to="/library" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="double-outline-card" style={{ padding: '28px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', height: '100%' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(180,83,31,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                <Library size={28} color="var(--color-secondary)" />
               </div>
-              <p style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
-                Measures pen pressure, tapering beaks, attenuated limbs, and directional cross-hatching to find pieces with matching rhythmic velocity.
-              </p>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px', color: 'var(--color-primary)' }}>Private PDF Reader</h3>
+              <p style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: 0 }}>Upload art-reference books, exhibition catalogues, tutorials, and scanned sketchbooks. Read them in Kin with bookmarks, page notes, and a distraction-free reading mode.</p>
             </div>
-
-            {/* Dimension 2 */}
-            <div 
-              style={{
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '24px',
-              }}
-            >
-              <div 
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '1.25rem',
-                  color: 'var(--color-primary)',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ color: 'var(--color-accent)' }}>02.</span>
-                <span>Hybrid Anatomy</span>
+          </Link>
+          <Link to="/archive" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="double-outline-card" style={{ padding: '28px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)', height: '100%' }}>
+              <div style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(214,51,122,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                <Archive size={28} color="var(--color-accent)" />
               </div>
-              <p style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
-                Identifies chimerical traits: avian beaks on anthropomorphic torsos, insectoid wings, wheels, and detached ocular orbs.
-              </p>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px', color: 'var(--color-primary)' }}>Kin Archive</h3>
+              <p style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--color-text-secondary)', margin: 0 }}>Twenty first-party artworks bundled with Kin Studio — ink studies, creatures, and investigations. Reference them while reading or pin them to your Art Room board.</p>
             </div>
-
-            {/* Dimension 3 */}
-            <div 
-              style={{
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '24px',
-              }}
-            >
-              <div 
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '1.25rem',
-                  color: 'var(--color-primary)',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ color: 'var(--color-accent-teal)' }}>03.</span>
-                <span>Chromatic Register</span>
-              </div>
-              <p style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
-                Recognizes the artist's double-outline offset habit, matching saturated magenta, rust, and emerald jewel tones against warm grounds.
-              </p>
-            </div>
-
-            {/* Dimension 4 */}
-            <div 
-              style={{
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '24px',
-              }}
-            >
-              <div 
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: '1.25rem',
-                  color: 'var(--color-primary)',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <span style={{ color: 'var(--color-warning)' }}>04.</span>
-                <span>Material Ground</span>
-              </div>
-              <p style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
-                Respects the physical medium: ruled ledger paper, ink bleed, vellum tooth, and inverted chalk-on-dark atmospheres.
-              </p>
-            </div>
-          </div>
+          </Link>
         </div>
       </section>
     </div>

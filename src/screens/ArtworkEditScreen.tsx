@@ -76,7 +76,7 @@ export const ArtworkEditScreen: React.FC = () => {
           headline="Artwork Not Found"
           description="Could not locate this drawing to edit."
           actionLabel="Return to Sketchbook"
-          onAction={() => navigate('/sketchbook')}
+          onAction={() => navigate('/my-art')}
         />
       </div>
     );
@@ -97,7 +97,7 @@ export const ArtworkEditScreen: React.FC = () => {
     if (isDirty) {
       setShowDiscardConfirm(true);
     } else {
-      navigate(`/sketchbook/${artwork.id}`);
+      navigate(`/my-art/${artwork.id}`);
     }
   };
 
@@ -149,7 +149,7 @@ export const ArtworkEditScreen: React.FC = () => {
         message: 'Artwork details successfully updated.',
       });
 
-      navigate(`/sketchbook/${artwork.id}`);
+      navigate(`/my-art/${artwork.id}`);
     } catch {
       showToast({
         type: 'error',
@@ -641,10 +641,12 @@ export const ArtworkEditScreen: React.FC = () => {
         variant="warning"
         onConfirm={() => {
           setShowDiscardConfirm(false);
-          navigate(`/sketchbook/${artwork.id}`);
+          navigate(`/my-art/${artwork.id}`);
         }}
         onCancel={() => setShowDiscardConfirm(false)}
       />
     </div>
   );
 };
+
+

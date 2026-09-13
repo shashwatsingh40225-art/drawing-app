@@ -29,7 +29,7 @@ export const LoginScreen: React.FC = () => {
 
     const res = await signIn(email, password);
     if (!res.error) {
-      navigate('/sketchbook');
+      navigate('/my-art');
     }
   };
 
@@ -38,7 +38,7 @@ export const LoginScreen: React.FC = () => {
     setValidationError(null);
     const res = await signIn('artist@kin-studio.local', 'demo123456');
     if (!res.error) {
-      navigate('/sketchbook');
+      navigate('/my-art');
     }
   };
 
@@ -270,3 +270,4 @@ export const LoginScreen: React.FC = () => {
     </div>
   );
 };
+
