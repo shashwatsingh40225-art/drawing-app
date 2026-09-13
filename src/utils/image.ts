@@ -1,0 +1,19 @@
+import imageCompression from 'browser-image-compression';
+
+export async function compressForDisplay(file: File): Promise<Blob> {
+  return imageCompression(file, {
+    maxWidthOrHeight: 1920,
+    maxSizeMB: 0.3,
+    fileType: 'image/webp',
+    useWebWorker: true,
+  });
+}
+
+export async function compressForThumbnail(file: File): Promise<Blob> {
+  return imageCompression(file, {
+    maxWidthOrHeight: 400,
+    maxSizeMB: 0.05,
+    fileType: 'image/webp',
+    useWebWorker: true,
+  });
+}
