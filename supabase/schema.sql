@@ -87,10 +87,29 @@ CREATE INDEX IF NOT EXISTS idx_collections_user_id ON collections(user_id);
 -- ========================================
 -- Storage setup (bucket: 'artwork-images')
 -- ========================================
--- In Supabase Dashboard:
--- 1. Create a private bucket named: artwork-images
--- 2. Storage RLS policy:
--- CREATE POLICY "Users can access own files"
---   ON storage.objects FOR ALL
---   USING (bucket_id = 'artwork-images' AND (storage.foldername(name))[1] = auth.uid()::text)
---   WITH CHECK (bucket_id = 'artwork-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- 1. Create the private bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('artwork-images', 'artwork-images', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- 2. Storage RLS policies for artwork-images
+DROP POLICY IF EXISTS "Users can manage own artwork images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload own artwork images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view own artwork images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own artwork images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own artwork images" ON storage.objects;
+DROP POLICY IF EXISTS "Users can access own files" ON storage.objects;
+
+CREATE POLICY "Users can manage own artwork images"
+  ON storage.objects FOR ALL
+  TO authenticated
+  USING (
+    bucket_id = 'artwork-images' 
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  )
+  WITH CHECK (
+    bucket_id = 'artwork-images' 
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
