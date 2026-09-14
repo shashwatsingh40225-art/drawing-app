@@ -10,6 +10,7 @@ import { useBookStore } from '../stores/bookStore';
 import { useToastStore } from '../stores/toastStore';
 import { Book } from '../types/book';
 import { PageTransition } from '../components/motion/PageTransition';
+import { worlds } from '../styles/tokens';
 
 export const LibraryScreen: React.FC = () => {
   const { books, loading, fetchBooks, softDeleteBook } = useBookStore();
@@ -19,6 +20,8 @@ export const LibraryScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [bookToDelete, setBookToDelete] = useState<Book | null>(null);
+
+  const world = worlds.inkStudy;
 
   useEffect(() => {
     fetchBooks();
@@ -54,11 +57,20 @@ export const LibraryScreen: React.FC = () => {
 
   return (
     <PageTransition>
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+      <div
+        style={{
+          maxWidth: '1280px',
+          margin: '0 auto',
+          padding: '36px 20px 96px 20px',
+          '--world-accent': world.accent,
+          '--world-secondary-accent': world.secondaryAccent,
+          '--world-border': world.border,
+        } as React.CSSProperties}
+      >
       <PageHeader
         icon={<Library size={16} />}
-        eyebrowLabel="My Library — Private Art Companion"
-        title="My Book Library"
+        eyebrowLabel="My Library — Kin Studio Collection"
+        title="Reference Books & Guides"
         description="Your private collection of reference PDFs, anatomy guides, art manuals, and study notes. Read and annotate without distractions."
         action={
           <button
@@ -70,6 +82,8 @@ export const LibraryScreen: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
+              backgroundColor: world.accent,
+              borderColor: world.accent,
             }}
           >
             <Plus size={16} />
@@ -101,9 +115,10 @@ export const LibraryScreen: React.FC = () => {
             gap: '16px',
             marginBottom: '28px',
             padding: '14px 18px',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
+            backgroundColor: world.surface,
+            border: `1px solid ${world.border}`,
             borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-subtle)',
           }}
         >
           {/* Search box */}
@@ -113,13 +128,13 @@ export const LibraryScreen: React.FC = () => {
               alignItems: 'center',
               gap: '10px',
               flex: '1 1 260px',
-              backgroundColor: 'var(--color-surface-elevated)',
-              border: '1px solid var(--color-border)',
+              backgroundColor: world.surfaceElevated,
+              border: `1px solid ${world.border}`,
               borderRadius: 'var(--radius-pill)',
               padding: '8px 14px',
             }}
           >
-            <Search size={16} color="var(--color-text-muted)" />
+            <Search size={16} color={world.textMuted} />
             <input
               type="text"
               value={searchQuery}
@@ -130,7 +145,7 @@ export const LibraryScreen: React.FC = () => {
                 background: 'none',
                 outline: 'none',
                 fontSize: '0.88rem',
-                color: 'var(--color-text-primary)',
+                color: world.textPrimary,
                 width: '100%',
               }}
             />
@@ -142,7 +157,7 @@ export const LibraryScreen: React.FC = () => {
                   background: 'none',
                   border: 'none',
                   fontSize: '0.85rem',
-                  color: 'var(--color-text-muted)',
+                  color: world.textMuted,
                   cursor: 'pointer',
                   padding: '2px',
                 }}
@@ -155,7 +170,7 @@ export const LibraryScreen: React.FC = () => {
           {/* Tags list */}
           {allTags.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: world.textMuted }}>
                 <Filter size={13} />
                 <span>Filter:</span>
               </div>
@@ -163,37 +178,42 @@ export const LibraryScreen: React.FC = () => {
                 type="button"
                 onClick={() => setSelectedTag(null)}
                 style={{
-                  padding: '4px 10px',
+                  padding: '4px 12px',
                   borderRadius: 'var(--radius-pill)',
                   fontSize: '0.76rem',
                   fontWeight: 600,
                   cursor: 'pointer',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: selectedTag === null ? 'var(--color-primary)' : 'transparent',
-                  color: selectedTag === null ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+                  border: `1px solid ${selectedTag === null ? world.accent : world.border}`,
+                  backgroundColor: selectedTag === null ? world.accent : 'rgba(139, 74, 43, 0.05)',
+                  color: selectedTag === null ? '#FFFFFF' : world.textSecondary,
+                  transition: 'all 150ms ease',
                 }}
               >
                 All ({books.length})
               </button>
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: 'var(--radius-pill)',
-                    fontSize: '0.76rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: selectedTag === tag ? 'var(--color-primary)' : 'transparent',
-                    color: selectedTag === tag ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
-                  }}
-                >
-                  #{tag}
-                </button>
-              ))}
+              {allTags.map((tag) => {
+                const isSelected = selectedTag === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setSelectedTag(isSelected ? null : tag)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: 'var(--radius-pill)',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: `1px solid ${isSelected ? world.accent : world.border}`,
+                      backgroundColor: isSelected ? world.accent : 'rgba(139, 74, 43, 0.05)',
+                      color: isSelected ? '#FFFFFF' : world.textSecondary,
+                      transition: 'all 150ms ease',
+                    }}
+                  >
+                    #{tag}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -245,16 +265,17 @@ export const LibraryScreen: React.FC = () => {
           style={{
             textAlign: 'center',
             padding: '60px 24px',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
+            backgroundColor: world.surface,
+            border: `1.5px solid ${world.border}`,
             borderRadius: 'var(--radius-xl)',
+            boxShadow: 'var(--shadow-subtle)',
           }}
         >
-          <BookOpen size={36} color="var(--color-text-muted)" style={{ marginBottom: '12px' }} />
-          <h3 style={{ fontFamily: 'var(--font-display)', color: 'var(--color-primary)', margin: '0 0 6px 0' }}>
+          <BookOpen size={36} color={world.textMuted} style={{ marginBottom: '12px' }} />
+          <h3 style={{ fontFamily: 'var(--font-display)', color: world.textPrimary, margin: '0 0 6px 0' }}>
             No books found
           </h3>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', margin: '0 0 16px 0' }}>
+          <p style={{ color: world.textSecondary, fontSize: '0.9rem', margin: '0 0 16px 0' }}>
             No titles or tags match "{searchQuery || selectedTag}".
           </p>
           <button
@@ -264,13 +285,14 @@ export const LibraryScreen: React.FC = () => {
               setSelectedTag(null);
             }}
             style={{
-              padding: '8px 16px',
+              padding: '8px 18px',
               borderRadius: 'var(--radius-pill)',
-              border: '1px solid var(--color-border)',
-              backgroundColor: 'transparent',
-              color: 'var(--color-text-primary)',
+              border: `1px solid ${world.border}`,
+              backgroundColor: world.surfaceElevated,
+              color: world.textPrimary,
               cursor: 'pointer',
               fontSize: '0.85rem',
+              fontWeight: 600,
             }}
           >
             Clear Filters
@@ -283,7 +305,7 @@ export const LibraryScreen: React.FC = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
             gap: '24px',
           }}
         >

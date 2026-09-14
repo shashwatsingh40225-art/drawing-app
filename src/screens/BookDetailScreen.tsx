@@ -30,6 +30,7 @@ export const BookDetailScreen: React.FC = () => {
   const { getProgress, fetchProgress } = useReadingProgressStore();
   const { getBookmarks, fetchBookmarks } = useBookmarkStore();
   const { showToast } = useToastStore();
+  const { addItem: addArtRoomItem } = useArtRoomStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -103,8 +104,6 @@ export const BookDetailScreen: React.FC = () => {
     navigate('/library');
   };
 
-  const { addItem: addArtRoomItem } = useArtRoomStore();
-
   const handlePinToArtRoom = async () => {
     await addArtRoomItem({
       type: 'book_page',
@@ -159,10 +158,11 @@ export const BookDetailScreen: React.FC = () => {
 
       {/* Main Content Layout */}
       <div
+        className="two-column-detail-layout"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 340px) 1fr',
-          gap: '40px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '32px',
           alignItems: 'start',
         }}
       >

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { X, Image, BookOpen, Archive, StickyNote, Plus, Check } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Image, BookOpen, Archive, StickyNote } from 'lucide-react';
 import { useArtworkStore } from '../../stores/artworkStore';
 import { useBookStore } from '../../stores/bookStore';
 import { KIN_ARCHIVE_ASSETS } from '../../data/kinArchive';
 import { ArtRoomItemType } from '../../types/artRoom';
+import { worlds } from '../../styles/tokens';
 
 interface AddItemModalProps {
   isOpen: boolean;
@@ -26,12 +28,14 @@ interface AddItemModalProps {
 }
 
 export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onAddItem }) => {
+  const world = worlds.magentaCreature;
   const { artworks } = useArtworkStore();
   const { books } = useBookStore();
 
   const [activeTab, setActiveTab] = useState<'archive' | 'artworks' | 'books' | 'note'>('archive');
   const [noteTitle, setNoteTitle] = useState('');
   const [noteContent, setNoteContent] = useState('');
+  const [bloomingId, setBloomingId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -39,55 +43,67 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
     const asset = KIN_ARCHIVE_ASSETS.find((a) => a.id === assetId);
     if (!asset) return;
 
-    onAddItem({
-      type: 'archive_ref',
-      title: asset.title,
-      thumbnail_url: asset.filename,
-      ref_archive_asset_id: asset.id,
-      width_percent: 24,
-      height_percent: 28,
-      x_percent: 38 + (Math.random() * 10 - 5),
-      y_percent: 35 + (Math.random() * 10 - 5),
-      rotation_degrees: Math.round(Math.random() * 6 - 3),
-    });
-    onClose();
+    setBloomingId(asset.id);
+    setTimeout(() => {
+      onAddItem({
+        type: 'archive_ref',
+        title: asset.title,
+        thumbnail_url: asset.filename,
+        ref_archive_asset_id: asset.id,
+        width_percent: 24,
+        height_percent: 28,
+        x_percent: 38 + (Math.random() * 10 - 5),
+        y_percent: 35 + (Math.random() * 10 - 5),
+        rotation_degrees: Math.round(Math.random() * 6 - 3),
+      });
+      setBloomingId(null);
+      onClose();
+    }, 150);
   };
 
   const handleAddArtwork = (artId: string) => {
     const art = artworks.find((a) => a.id === artId);
     if (!art) return;
 
-    onAddItem({
-      type: 'artwork',
-      title: art.title,
-      thumbnail_url: art.thumbnail_path || art.image_path || undefined,
-      ref_artwork_id: art.id,
-      width_percent: 25,
-      height_percent: 30,
-      x_percent: 40 + (Math.random() * 10 - 5),
-      y_percent: 35 + (Math.random() * 10 - 5),
-      rotation_degrees: Math.round(Math.random() * 6 - 3),
-    });
-    onClose();
+    setBloomingId(art.id);
+    setTimeout(() => {
+      onAddItem({
+        type: 'artwork',
+        title: art.title,
+        thumbnail_url: art.thumbnail_path || art.image_path || undefined,
+        ref_artwork_id: art.id,
+        width_percent: 25,
+        height_percent: 30,
+        x_percent: 40 + (Math.random() * 10 - 5),
+        y_percent: 35 + (Math.random() * 10 - 5),
+        rotation_degrees: Math.round(Math.random() * 6 - 3),
+      });
+      setBloomingId(null);
+      onClose();
+    }, 150);
   };
 
   const handleAddBook = (bookId: string) => {
     const book = books.find((b) => b.id === bookId);
     if (!book) return;
 
-    onAddItem({
-      type: 'book_page',
-      title: `${book.title} (p. 1)`,
-      thumbnail_url: book.cover_thumbnail_path || book.cover_image_path || undefined,
-      ref_book_id: book.id,
-      ref_book_page: 1,
-      width_percent: 24,
-      height_percent: 28,
-      x_percent: 42 + (Math.random() * 10 - 5),
-      y_percent: 38 + (Math.random() * 10 - 5),
-      rotation_degrees: Math.round(Math.random() * 6 - 3),
-    });
-    onClose();
+    setBloomingId(book.id);
+    setTimeout(() => {
+      onAddItem({
+        type: 'book_page',
+        title: `${book.title} (p. 1)`,
+        thumbnail_url: book.cover_thumbnail_path || book.cover_image_path || undefined,
+        ref_book_id: book.id,
+        ref_book_page: 1,
+        width_percent: 24,
+        height_percent: 28,
+        x_percent: 42 + (Math.random() * 10 - 5),
+        y_percent: 38 + (Math.random() * 10 - 5),
+        rotation_degrees: Math.round(Math.random() * 6 - 3),
+      });
+      setBloomingId(null);
+      onClose();
+    }, 150);
   };
 
   const handleAddNote = (e: React.FormEvent) => {
@@ -109,31 +125,33 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
     onClose();
   };
 
-  return (
+  const modalContent = (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(35, 23, 16, 0.7)',
-        backdropFilter: 'blur(3px)',
+        backgroundColor: 'rgba(26, 14, 28, 0.85)',
+        backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9500,
-        padding: '20px',
+        zIndex: 10000,
+        padding: '16px 12px',
+        overflowY: 'auto',
       }}
       onClick={onClose}
     >
       <div
-        className="card-surface"
+        className="add-item-modal-card"
         style={{
           width: '100%',
           maxWidth: '680px',
-          maxHeight: '85vh',
-          backgroundColor: 'var(--color-surface)',
+          maxHeight: 'calc(100vh - 32px)',
+          margin: 'auto',
+          backgroundColor: world.surface,
           borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-border)',
-          boxShadow: 'var(--shadow-modal)',
+          border: `1.5px solid ${world.accent}`,
+          boxShadow: `4px 4px 0 0 ${world.secondaryAccent}, 0 24px 60px rgba(26, 14, 28, 0.45)`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -146,119 +164,117 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '20px 24px',
-            borderBottom: '1px solid var(--color-border)',
+            padding: '18px 24px 14px',
+            borderBottom: `1px solid ${world.borderSubtle}`,
           }}
         >
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-            Pin Item to Art Room
+          <div>
+            <div
+              style={{
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: world.accent,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                marginBottom: '2px',
+              }}
+            >
+              Pin to Canvas
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                color: world.textPrimary,
+              }}
+            >
+              Pin Item to Art Room
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '4px' }}
+            aria-label="Close"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: world.textSecondary,
+              padding: '6px',
+              borderRadius: 'var(--radius-full)',
+              display: 'flex',
+              alignItems: 'center',
+            }}
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Tab Selection */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', backgroundColor: 'rgba(58, 33, 64, 0.03)' }}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('archive')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: activeTab === 'archive' ? 'var(--color-secondary)' : 'var(--color-text-secondary)',
-              borderBottom: activeTab === 'archive' ? '2px solid var(--color-secondary)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <Archive size={15} />
-            <span>Kin Archive</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('artworks')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: activeTab === 'artworks' ? 'var(--color-secondary)' : 'var(--color-text-secondary)',
-              borderBottom: activeTab === 'artworks' ? '2px solid var(--color-secondary)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <Image size={15} />
-            <span>My Art ({artworks.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('books')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: activeTab === 'books' ? 'var(--color-secondary)' : 'var(--color-text-secondary)',
-              borderBottom: activeTab === 'books' ? '2px solid var(--color-secondary)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <BookOpen size={15} />
-            <span>My Library ({books.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('note')}
-            style={{
-              flex: 1,
-              padding: '12px 16px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: activeTab === 'note' ? 'var(--color-secondary)' : 'var(--color-text-secondary)',
-              borderBottom: activeTab === 'note' ? '2px solid var(--color-secondary)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <StickyNote size={15} />
-            <span>Sticky Note</span>
-          </button>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            borderBottom: `1px solid ${world.borderSubtle}`,
+            backgroundColor: 'rgba(58, 33, 64, 0.02)',
+            overflowX: 'auto',
+          }}
+        >
+          {[
+            { id: 'archive' as const, label: 'Kin Archive', count: KIN_ARCHIVE_ASSETS.length, icon: Archive },
+            { id: 'artworks' as const, label: 'My Art', count: artworks.length, icon: Image },
+            { id: 'books' as const, label: 'My Library', count: books.length, icon: BookOpen },
+            { id: 'note' as const, label: 'Sticky Note', icon: StickyNote },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: `1px solid ${isActive ? world.accent : world.border}`,
+                  backgroundColor: isActive ? world.accent : 'transparent',
+                  color: isActive ? '#FFFFFF' : world.textSecondary,
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: isActive ? '0 2px 8px rgba(255, 45, 149, 0.25)' : 'none',
+                  transition: 'all 180ms ease',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Icon size={14} />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      opacity: isActive ? 0.9 : 0.65,
+                      backgroundColor: isActive ? 'rgba(255, 255, 255, 0.25)' : 'rgba(107, 79, 94, 0.12)',
+                      padding: '1px 6px',
+                      borderRadius: 'var(--radius-pill)',
+                    }}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           {activeTab === 'archive' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '14px' }}>
               {KIN_ARCHIVE_ASSETS.map((asset) => (
@@ -266,36 +282,53 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
                   key={asset.id}
                   type="button"
                   onClick={() => handleAddArchive(asset.id)}
+                  className={`double-outline-card ${bloomingId === asset.id ? 'pigment-bloom-active' : ''}`}
                   style={{
-                    background: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: '#FFFFFF',
+                    border: `1px solid ${world.border}`,
+                    borderRadius: 'var(--radius-lg)',
                     overflow: 'hidden',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
                     textAlign: 'left',
                     padding: '8px',
-                    transition: 'transform 150ms ease, border-color 150ms ease',
+                    boxShadow: 'var(--shadow-subtle)',
+                    transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.borderColor = 'var(--color-secondary)';
+                    e.currentTarget.style.borderColor = world.accent;
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.borderColor = 'var(--color-border)';
+                    e.currentTarget.style.borderColor = world.border;
                   }}
                 >
                   <img
                     src={asset.filename}
                     alt={asset.title}
-                    style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '4px', marginBottom: '8px' }}
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1 / 1',
+                      objectFit: 'cover',
+                      borderRadius: 'var(--radius-sm)',
+                      marginBottom: '6px',
+                    }}
                   />
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-secondary)' }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: world.accent }}>
                     {asset.code}
                   </div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div
+                    style={{
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      color: world.textPrimary,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
                     {asset.title}
                   </div>
                 </button>
@@ -306,8 +339,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
           {activeTab === 'artworks' && (
             <div>
               {artworks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>
-                  No personal artworks found in My Art yet.
+                <div style={{ textAlign: 'center', padding: '48px 20px', color: world.textMuted, fontSize: '0.9rem' }}>
+                  No personal artworks found in My Art yet. Upload your first sketch or painting to pin it here.
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '14px' }}>
@@ -316,24 +349,50 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
                       key={art.id}
                       type="button"
                       onClick={() => handleAddArtwork(art.id)}
+                      className={`double-outline-card ${bloomingId === art.id ? 'pigment-bloom-active' : ''}`}
                       style={{
-                        background: 'var(--color-surface-elevated)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: '#FFFFFF',
+                        border: `1px solid ${world.border}`,
+                        borderRadius: 'var(--radius-lg)',
                         overflow: 'hidden',
                         cursor: 'pointer',
                         display: 'flex',
                         flexDirection: 'column',
                         textAlign: 'left',
                         padding: '8px',
+                        boxShadow: 'var(--shadow-subtle)',
+                        transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.borderColor = world.accent;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.borderColor = world.border;
                       }}
                     >
                       <img
                         src={art.thumbnail_path || art.image_path || '/artist-reference/art-01.jpeg'}
                         alt={art.title}
-                        style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: '4px', marginBottom: '8px' }}
+                        style={{
+                          width: '100%',
+                          aspectRatio: '1 / 1',
+                          objectFit: 'cover',
+                          borderRadius: 'var(--radius-sm)',
+                          marginBottom: '6px',
+                        }}
                       />
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div
+                        style={{
+                          fontSize: '0.76rem',
+                          fontWeight: 600,
+                          color: world.textPrimary,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
                         {art.title}
                       </div>
                     </button>
@@ -346,8 +405,8 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
           {activeTab === 'books' && (
             <div>
               {books.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>
-                  No books found in your library yet.
+                <div style={{ textAlign: 'center', padding: '48px 20px', color: world.textMuted, fontSize: '0.9rem' }}>
+                  No books found in your library yet. Upload a PDF in My Library to pin plates here.
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '14px' }}>
@@ -356,25 +415,36 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
                       key={book.id}
                       type="button"
                       onClick={() => handleAddBook(book.id)}
+                      className={`double-outline-card ${bloomingId === book.id ? 'pigment-bloom-active' : ''}`}
                       style={{
-                        background: 'var(--color-surface-elevated)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: '#FFFFFF',
+                        border: `1px solid ${world.border}`,
+                        borderRadius: 'var(--radius-lg)',
                         overflow: 'hidden',
                         cursor: 'pointer',
                         display: 'flex',
                         flexDirection: 'column',
                         textAlign: 'left',
                         padding: '8px',
+                        boxShadow: 'var(--shadow-subtle)',
+                        transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.borderColor = world.accent;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.borderColor = world.border;
                       }}
                     >
                       <div
                         style={{
                           width: '100%',
                           aspectRatio: '1 / 1',
-                          backgroundColor: 'var(--color-primary-dark)',
-                          borderRadius: '4px',
-                          marginBottom: '8px',
+                          backgroundColor: '#2D1B36',
+                          borderRadius: 'var(--radius-sm)',
+                          marginBottom: '6px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -388,10 +458,19 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
                         ) : (
-                          <BookOpen size={24} color="var(--color-text-on-dark)" />
+                          <BookOpen size={24} color="#D9CBB5" />
                         )}
                       </div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div
+                        style={{
+                          fontSize: '0.76rem',
+                          fontWeight: 600,
+                          color: world.textPrimary,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
                         {book.title}
                       </div>
                     </button>
@@ -402,29 +481,61 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
           )}
 
           {activeTab === 'note' && (
-            <form onSubmit={handleAddNote} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form
+              onSubmit={handleAddNote}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                backgroundColor: '#FFFDF0',
+                border: '1px solid #FDE68A',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+              }}
+            >
               <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '6px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: '#78350F',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
                   Note Heading
                 </label>
                 <input
                   type="text"
                   value={noteTitle}
                   onChange={(e) => setNoteTitle(e.target.value)}
-                  placeholder="e.g. Palette Observation"
+                  placeholder="e.g. Color Harmony Observation"
                   style={{
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
+                    border: '1px solid #FDE68A',
                     fontSize: '0.9rem',
                     boxSizing: 'border-box',
+                    backgroundColor: '#FFFFFF',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '6px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    color: '#78350F',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
                   Content *
                 </label>
                 <textarea
@@ -435,22 +546,33 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
                   required
                   style={{
                     width: '100%',
-                    padding: '8px 12px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
+                    border: '1px solid #FDE68A',
                     fontSize: '0.9rem',
                     fontFamily: 'inherit',
                     boxSizing: 'border-box',
                     resize: 'vertical',
+                    backgroundColor: '#FFFFFF',
+                    lineHeight: 1.5,
                   }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
                 <button
                   type="submit"
-                  className="btn-primary"
-                  style={{ padding: '8px 20px', borderRadius: 'var(--radius-pill)', fontSize: '0.88rem' }}
+                  className="btn-accent double-outline-btn"
+                  style={{
+                    padding: '8px 22px',
+                    borderRadius: 'var(--radius-pill)',
+                    fontSize: '0.88rem',
+                    backgroundColor: world.accent,
+                    color: '#FFFFFF',
+                    border: `1px solid ${world.accent}`,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
                 >
                   Pin Note to Canvas
                 </button>
@@ -461,4 +583,7 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, onA
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
+

@@ -80,6 +80,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
         }}
       >
       <div
+        className="nav-header-inner"
         style={{
           maxWidth: '1280px',
           margin: '0 auto',
@@ -169,10 +170,10 @@ export const Navigation: React.FC<NavigationProps> = () => {
         </nav>
 
         {/* Right Section: Upload CTA + User Profile / Login */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Link
             to="/upload"
-            className="btn-primary double-outline-btn"
+            className="btn-primary double-outline-btn nav-upload-btn"
             style={{
               padding: '8px 16px',
               fontSize: '0.88rem',
@@ -183,14 +184,14 @@ export const Navigation: React.FC<NavigationProps> = () => {
             }}
           >
             <UploadCloud size={15} />
-            <span>Upload</span>
+            <span className="nav-btn-text">Upload</span>
           </Link>
 
           {user ? (
             <div ref={avatarRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setAvatarMenuOpen(!avatarMenuOpen)}
-                className="double-outline-btn"
+                className="double-outline-btn nav-user-btn"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -220,6 +221,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
                   {(user.email?.[0] ?? 'A').toUpperCase()}
                 </div>
                 <span
+                  className="nav-user-email"
                   style={{
                     fontSize: '0.82rem',
                     maxWidth: '100px',

@@ -40,6 +40,8 @@ export const ReaderScreen: React.FC = () => {
   const [isAddingNote, setIsAddingNote] = useState<boolean>(false);
   const [activeSidebar, setActiveSidebar] = useState<'thumbnails' | 'bookmarks' | 'notes' | 'archive' | null>(null);
   const [loadingUrl, setLoadingUrl] = useState<boolean>(true);
+  const [isQuietReading, setIsQuietReading] = useState<boolean>(false);
+  const [isChromeFaded, setIsChromeFaded] = useState<boolean>(false);
 
   const book = id ? getBookById(id) : undefined;
   const progress = id ? getProgress(id) : undefined;
@@ -230,6 +232,11 @@ export const ReaderScreen: React.FC = () => {
           e.preventDefault();
           setIsFocusMode((f) => !f);
           break;
+        case 'q':
+        case 'Q':
+          e.preventDefault();
+          setIsQuietReading((q) => !q);
+          break;
         case 'Escape':
           if (isAddingNote) {
             e.preventDefault();
@@ -250,6 +257,29 @@ export const ReaderScreen: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, handlePageChange, isFocusMode, isAddingNote, activeSidebar, handleToggleBookmark]);
+
+  // Chrome fade-on-read inactivity timer (3.5s)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const resetTimer = () => {
+      setIsChromeFaded(false);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        setIsChromeFaded(true);
+      }, 3500);
+    };
+
+    resetTimer();
+
+    const events = ['mousemove', 'mousedown', 'scroll', 'touchstart', 'keydown'];
+    events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      events.forEach((evt) => window.removeEventListener(evt, resetTimer));
+    };
+  }, []);
 
   if (!book && !loadingUrl) {
     return (
@@ -274,6 +304,7 @@ export const ReaderScreen: React.FC = () => {
 
   return (
     <div
+      className={isQuietReading ? 'quiet-reading-active' : ''}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -287,28 +318,32 @@ export const ReaderScreen: React.FC = () => {
     >
       <ReadingProgressBar currentPage={currentPage} totalPages={totalPages} />
 
-      {/* Top Toolbar */}
-      <ReaderToolbar
-        bookTitle={book?.title || 'PDF Document'}
-        bookId={book?.id || ''}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        zoomScale={zoomScale}
-        isBookmarked={bookmarked}
-        isFocusMode={isFocusMode}
-        isAddingNote={isAddingNote}
-        activeSidebar={activeSidebar}
-        onPageChange={handlePageChange}
-        onZoomChange={setZoomScale}
-        onToggleBookmark={handleToggleBookmark}
-        onToggleAddNote={() => setIsAddingNote(!isAddingNote)}
-        onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
-        onToggleSidebar={(sidebar) =>
-          setActiveSidebar((current) => (current === sidebar ? null : sidebar))
-        }
-        onFitWidth={() => setZoomScale(1.3)}
-        onFitPage={() => setZoomScale(1.0)}
-      />
+      {/* Top Toolbar in Kin Layer */}
+      <div className={`reader-kin-chrome ${isChromeFaded ? 'reader-kin-chrome-faded' : ''}`}>
+        <ReaderToolbar
+          bookTitle={book?.title || 'PDF Document'}
+          bookId={book?.id || ''}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          zoomScale={zoomScale}
+          isBookmarked={bookmarked}
+          isFocusMode={isFocusMode}
+          isAddingNote={isAddingNote}
+          activeSidebar={activeSidebar}
+          onPageChange={handlePageChange}
+          onZoomChange={setZoomScale}
+          onToggleBookmark={handleToggleBookmark}
+          onToggleAddNote={() => setIsAddingNote(!isAddingNote)}
+          onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
+          onToggleSidebar={(sidebar) =>
+            setActiveSidebar((current) => (current === sidebar ? null : sidebar))
+          }
+          onFitWidth={() => setZoomScale(1.3)}
+          onFitPage={() => setZoomScale(1.0)}
+          isQuietReading={isQuietReading}
+          onToggleQuietReading={() => setIsQuietReading((q) => !q)}
+        />
+      </div>
 
       {/* Reader Main Layout */}
       <div {...swipeHandlers} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
@@ -332,6 +367,7 @@ export const ReaderScreen: React.FC = () => {
             onUpdateAnnotation={updateAnnotation}
             onDeleteAnnotation={deleteAnnotation}
             onLoadSuccess={handleDocumentLoadSuccess}
+            isQuietReading={isQuietReading}
           />
         )}
 

@@ -34,9 +34,14 @@ export const ArtworkEditScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { artworks, updateArtwork } = useArtworkStore();
-  const { collections } = useCollectionStore();
+  const { artworks, updateArtwork, fetchArtworks, loading } = useArtworkStore();
+  const { collections, fetchCollections } = useCollectionStore();
   const { showToast } = useToastStore();
+
+  useEffect(() => {
+    fetchArtworks();
+    fetchCollections();
+  }, [fetchArtworks, fetchCollections]);
 
   const artwork = artworks.find((a) => a.id === id);
 
@@ -67,6 +72,16 @@ export const ArtworkEditScreen: React.FC = () => {
       setSelectedCollections(artwork.collection_ids || []);
     }
   }, [artwork]);
+
+  if (loading && !artwork) {
+    return (
+      <div style={{ maxWidth: '800px', margin: '80px auto', textAlign: 'center' }}>
+        <p style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text-secondary)', fontSize: '1.1rem' }}>
+          Loading studio folio...
+        </p>
+      </div>
+    );
+  }
 
   if (!artwork) {
     return (

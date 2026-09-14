@@ -1,21 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Artwork, useArtworkStore } from '../../stores/artworkStore';
 import { ArtworkMat } from '../ui/ArtworkMat';
 import { Badge } from '../ui/Badge';
 import { formatRelative } from '../../utils/dates';
 import { Star } from 'lucide-react';
+import { worlds } from '../../styles/tokens';
 
 interface ArtworkCardProps {
   artwork: Artwork;
 }
 
 export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
+  const world = worlds.magentaCreature;
   const { toggleFavorite } = useArtworkStore();
+  const [starBurst, setStarBurst] = useState(false);
 
   const handleStarClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setStarBurst(true);
+    setTimeout(() => setStarBurst(false), 240);
     toggleFavorite(artwork.id);
   };
 
@@ -24,17 +29,17 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
   return (
     <Link
       to={`/my-art/${artwork.id}`}
-      className="card-surface double-outline-card"
+      className="card-surface double-outline-card sketchbook-artwork-card"
       style={{
         cursor: 'pointer',
-        backgroundColor: 'var(--color-surface)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--color-border)',
+        backgroundColor: world.surface,
+        borderRadius: 'var(--radius-xl)',
+        border: `1.5px solid ${world.border}`,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         boxShadow: 'var(--shadow-subtle)',
-        transition: 'transform 200ms cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 150ms ease-in-out',
+        transition: 'transform 200ms cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 180ms ease, border-color 150ms ease',
         position: 'relative',
         textDecoration: 'none',
         color: 'inherit',
@@ -53,19 +58,30 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
       </div>
 
       {/* Card Info & Badges */}
-      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+      <div
+        style={{
+          padding: '14px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          flex: 1,
+          backgroundColor: world.surfaceElevated,
+          borderTop: `1px solid ${world.borderSubtle}`,
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
           <h3
             style={{
               fontFamily: 'var(--font-display)',
-              fontSize: '1.05rem',
-              fontWeight: 600,
-              color: 'var(--color-primary)',
+              fontSize: '1rem',
+              fontWeight: 700,
+              color: world.textPrimary,
               margin: 0,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               flex: 1,
+              lineHeight: 1.3,
             }}
             title={artwork.title}
           >
@@ -78,18 +94,20 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              padding: '2px',
+              padding: '3px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: artwork.is_favorite ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              transition: 'transform 150ms ease-in-out',
+              color: artwork.is_favorite ? world.accent : world.textMuted,
+              transform: starBurst ? 'scale(1.35) rotate(15deg)' : 'scale(1)',
+              transition: 'transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), color 150ms ease',
+              borderRadius: 'var(--radius-full)',
             }}
             aria-label={artwork.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             <Star
               size={18}
-              fill={artwork.is_favorite ? 'var(--color-accent)' : 'none'}
+              fill={artwork.is_favorite ? world.accent : 'none'}
               strokeWidth={artwork.is_favorite ? 0 : 2}
             />
           </button>
@@ -110,9 +128,10 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
 
           <span
             style={{
-              fontSize: '0.75rem',
-              color: 'var(--color-text-muted)',
+              fontSize: '0.74rem',
+              color: world.textMuted,
               marginLeft: 'auto',
+              fontWeight: 500,
             }}
           >
             {formatRelative(artwork.creation_date || artwork.upload_date)}
@@ -122,3 +141,4 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
     </Link>
   );
 };
+

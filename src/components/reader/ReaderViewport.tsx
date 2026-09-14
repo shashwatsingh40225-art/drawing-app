@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page } from 'react-pdf';
 import { ConcentricPortal } from '../ConcentricPortal';
 import { AnnotationOverlay } from './AnnotationOverlay';
@@ -20,6 +20,7 @@ interface ReaderViewportProps {
   onDeleteAnnotation: (id: string) => void;
   onLoadSuccess: (numPages: number) => void;
   onLoadError?: (error: Error) => void;
+  isQuietReading?: boolean;
 }
 
 export const ReaderViewport: React.FC<ReaderViewportProps> = ({
@@ -35,9 +36,53 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   onDeleteAnnotation,
   onLoadSuccess,
   onLoadError,
+  isQuietReading = false,
 }) => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return Math.max(280, window.innerWidth - 32);
+    }
+    return 360;
+  });
+
+  // Measure container width and dynamically recalculate on resize and orientation change
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => {
+      const computed = window.getComputedStyle(container);
+      const padLeft = parseFloat(computed.paddingLeft) || 0;
+      const padRight = parseFloat(computed.paddingRight) || 0;
+      const available = container.clientWidth - (padLeft + padRight);
+      if (available > 0) {
+        setContainerWidth(available);
+      }
+    };
+
+    updateWidth();
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        updateWidth();
+      });
+      resizeObserver.observe(container);
+    }
+
+    window.addEventListener('resize', updateWidth);
+    window.addEventListener('orientationchange', updateWidth);
+
+    return () => {
+      if (resizeObserver) resizeObserver.disconnect();
+      window.removeEventListener('resize', updateWidth);
+      window.removeEventListener('orientationchange', updateWidth);
+    };
+  }, []);
 
   // Detect if the file is an image (demo placeholder) rather than an actual PDF
   const isImagePlaceholder =
@@ -58,36 +103,48 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
     if (onLoadError) onLoadError(err);
   };
 
+  // Base fit width: fit container on mobile, max 840px on wide desktop
+  const baseFitWidth = Math.min(containerWidth, 840);
+  // When zoomed past 1.0, scale effective page width for sharp rendering & contained panning
+  const effectivePageWidth = Math.round(baseFitWidth * zoomScale);
+  const isOverflowing = effectivePageWidth > containerWidth;
+
   return (
     <div
+      ref={containerRef}
       style={{
         flex: 1,
+        width: '100%',
+        maxWidth: '100%',
         height: '100%',
-        overflow: 'auto',
+        overflowX: 'auto',
+        overflowY: 'auto',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        alignItems: isOverflowing ? 'flex-start' : 'center',
         justifyContent: 'flex-start',
-        padding: '32px 16px 80px 16px',
+        padding: '24px 16px 80px 16px',
         backgroundColor: 'var(--color-background)',
+        WebkitOverflowScrolling: 'touch',
+        boxSizing: 'border-box',
       }}
     >
       {/* If placeholder image representation */}
       {isImagePlaceholder ? (
         <div
           style={{
-            maxWidth: '840px',
-            width: '100%',
+            width: `${effectivePageWidth}px`,
+            maxWidth: zoomScale <= 1 ? '100%' : 'none',
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-lg)',
             boxShadow: 'var(--shadow-card)',
-            padding: '24px',
+            padding: '20px',
             textAlign: 'center',
-            transform: `scale(${zoomScale})`,
-            transformOrigin: 'top center',
-            transition: 'transform 120ms ease-out',
             position: 'relative',
+            margin: isOverflowing ? '0 0 32px 0' : '0 auto 32px auto',
+            flexShrink: 0,
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -130,9 +187,11 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
         /* Real PDF Document via react-pdf */
         <div
           style={{
-            transform: `scale(${zoomScale})`,
-            transformOrigin: 'top center',
-            transition: 'transform 120ms ease-out',
+            width: `${effectivePageWidth}px`,
+            maxWidth: zoomScale <= 1 ? '100%' : 'none',
+            margin: isOverflowing ? '0 0 32px 0' : '0 auto 32px auto',
+            flexShrink: 0,
+            boxSizing: 'border-box',
           }}
         >
           <Document
@@ -158,6 +217,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
                   padding: '32px',
                   textAlign: 'center',
                   boxShadow: 'var(--shadow-card)',
+                  margin: '0 auto',
                 }}
               >
                 <AlertCircle size={36} color="var(--color-error)" style={{ marginBottom: '12px' }} />
@@ -188,17 +248,16 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
             }
           >
             <div
+              key={currentPage}
+              className={`reader-reading-layer ${isQuietReading ? '' : 'page-turn-transition'}`}
               style={{
-                backgroundColor: '#FFFFFF',
-                boxShadow: '0 8px 30px rgba(35, 23, 16, 0.15)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '4px',
-                overflow: 'hidden',
+                width: '100%',
                 position: 'relative',
               }}
             >
               <Page
                 pageNumber={currentPage}
+                width={effectivePageWidth}
                 renderTextLayer={true}
                 renderAnnotationLayer={true}
                 loading={
@@ -207,15 +266,17 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
                   </div>
                 }
               />
-              <AnnotationOverlay
-                bookId={bookId}
-                pageNumber={currentPage}
-                annotations={annotations}
-                isAddingNote={isAddingNote}
-                onAddNoteAt={onAddNoteAt}
-                onUpdateAnnotation={onUpdateAnnotation}
-                onDeleteAnnotation={onDeleteAnnotation}
-              />
+              {!isQuietReading && (
+                <AnnotationOverlay
+                  bookId={bookId}
+                  pageNumber={currentPage}
+                  annotations={annotations}
+                  isAddingNote={isAddingNote}
+                  onAddNoteAt={onAddNoteAt}
+                  onUpdateAnnotation={onUpdateAnnotation}
+                  onDeleteAnnotation={onDeleteAnnotation}
+                />
+              )}
             </div>
           </Document>
         </div>

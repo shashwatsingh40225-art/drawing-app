@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Archive, LayoutGrid } from 'lucide-react';
+import { Archive, LayoutGrid, Sparkles, Filter } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ArtworkMat } from '../components/ui/ArtworkMat';
 import { Badge } from '../components/ui/Badge';
@@ -11,12 +11,38 @@ import { useToastStore } from '../stores/toastStore';
 import { PageTransition } from '../components/motion/PageTransition';
 import { PigmentBloom } from '../components/motion/PigmentBloom';
 import { ArchiveLightbox } from '../components/archive/ArchiveLightbox';
+import { worlds, motionTiming } from '../styles/tokens';
+
+const CATEGORIES = [
+  { id: 'all', label: 'All Works' },
+  { id: 'characters', label: 'Avian & Characters' },
+  { id: 'ink', label: 'Ink Studies' },
+  { id: 'vibrant', label: 'Color & Marker' },
+  { id: 'vision', label: 'Ritual & Orbs' },
+];
 
 export const ArchiveScreen: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<KinArchiveAsset | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [bloomingItemId, setBloomingItemId] = useState<string | null>(null);
+
   const { addItem: addArtRoomItem } = useArtRoomStore();
   const { showToast } = useToastStore();
   const navigate = useNavigate();
+
+  const world = worlds.magentaCreature;
+
+  const handleSelectCard = (item: KinArchiveAsset) => {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setSelectedItem(item);
+      return;
+    }
+    setBloomingItemId(item.id);
+    setTimeout(() => {
+      setSelectedItem(item);
+      setBloomingItemId(null);
+    }, 180);
+  };
 
   const handlePinToArtRoom = async (item: KinArchiveAsset) => {
     await addArtRoomItem({
@@ -43,9 +69,64 @@ export const ArchiveScreen: React.FC = () => {
     setSelectedItem(null);
   };
 
+  const filteredAssets = KIN_ARCHIVE_ASSETS.filter((item) => {
+    if (activeCategory === 'all') return true;
+    const text = `${item.title} ${item.medium} ${item.description} ${(item.tags || []).join(' ')}`.toLowerCase();
+    if (activeCategory === 'characters') {
+      return (
+        text.includes('bird') ||
+        text.includes('crane') ||
+        text.includes('lemur') ||
+        text.includes('creature') ||
+        text.includes('figure') ||
+        text.includes('whimsical')
+      );
+    }
+    if (activeCategory === 'ink') {
+      return (
+        text.includes('ink') ||
+        text.includes('pen') ||
+        text.includes('cross-hatch') ||
+        text.includes('sepia') ||
+        text.includes('monochrome')
+      );
+    }
+    if (activeCategory === 'vibrant') {
+      return (
+        text.includes('marker') ||
+        text.includes('magenta') ||
+        text.includes('color') ||
+        text.includes('flame') ||
+        text.includes('chromatic') ||
+        text.includes('orange') ||
+        text.includes('blue')
+      );
+    }
+    if (activeCategory === 'vision') {
+      return (
+        text.includes('eye') ||
+        text.includes('orb') ||
+        text.includes('mask') ||
+        text.includes('ritual') ||
+        text.includes('vision') ||
+        text.includes('iris')
+      );
+    }
+    return true;
+  });
+
   return (
     <PageTransition>
-      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+      <div
+        style={{
+          maxWidth: '1280px',
+          margin: '0 auto',
+          padding: '36px 20px 96px 20px',
+          '--world-accent': world.accent,
+          '--world-secondary-accent': world.secondaryAccent,
+          '--world-border': world.border,
+        } as React.CSSProperties}
+      >
         {/* Header with ART-06 Atmosphere */}
         <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-lg)', marginBottom: '24px' }}>
           <div
@@ -60,25 +141,101 @@ export const ArchiveScreen: React.FC = () => {
           />
         </div>
 
-        {/* Label clarification */}
+        {/* Categories and Label Bar */}
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '12px 18px',
-            backgroundColor: 'rgba(58, 33, 64, 0.05)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.85rem',
-            color: 'var(--color-text-secondary)',
+            flexDirection: 'column',
+            gap: '16px',
             marginBottom: '32px',
           }}
         >
-          <Archive size={15} color="var(--color-secondary)" />
-          <span>
-            These are <strong>bundled first-party artworks</strong> created for Kin Studio — not search results or content discovered from external sources.
-          </span>
+          {/* Category Filter Pills */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap',
+              padding: '12px 16px',
+              backgroundColor: world.surface,
+              border: `1px solid ${world.border}`,
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-subtle)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: world.textMuted, marginRight: '4px' }}>
+              <Filter size={14} />
+              <span style={{ fontWeight: 600 }}>Filter:</span>
+            </div>
+            {CATEGORIES.map((cat) => {
+              const isActive = activeCategory === cat.id;
+              const count = cat.id === 'all' ? KIN_ARCHIVE_ASSETS.length : KIN_ARCHIVE_ASSETS.filter((item) => {
+                const text = `${item.title} ${item.medium} ${item.description} ${(item.tags || []).join(' ')}`.toLowerCase();
+                if (cat.id === 'characters') return text.includes('bird') || text.includes('crane') || text.includes('lemur') || text.includes('creature') || text.includes('figure') || text.includes('whimsical');
+                if (cat.id === 'ink') return text.includes('ink') || text.includes('pen') || text.includes('cross-hatch') || text.includes('sepia') || text.includes('monochrome');
+                if (cat.id === 'vibrant') return text.includes('marker') || text.includes('magenta') || text.includes('color') || text.includes('flame') || text.includes('chromatic') || text.includes('orange') || text.includes('blue');
+                if (cat.id === 'vision') return text.includes('eye') || text.includes('orb') || text.includes('mask') || text.includes('ritual') || text.includes('vision') || text.includes('iris');
+                return true;
+              }).length;
+
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.id)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: 'var(--radius-pill)',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: `1px solid ${isActive ? world.accent : world.border}`,
+                    backgroundColor: isActive ? world.accent : 'rgba(255, 45, 149, 0.05)',
+                    color: isActive ? '#FFFFFF' : world.textSecondary,
+                    boxShadow: isActive ? '0 2px 8px rgba(255, 45, 149, 0.25)' : 'none',
+                    transition: 'all 180ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  }}
+                >
+                  <span>{cat.label}</span>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      opacity: isActive ? 0.9 : 0.65,
+                      backgroundColor: isActive ? 'rgba(255, 255, 255, 0.25)' : 'rgba(107, 79, 94, 0.12)',
+                      padding: '1px 6px',
+                      borderRadius: 'var(--radius-pill)',
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bundled clarification badge */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px 16px',
+              backgroundColor: 'rgba(58, 33, 64, 0.04)',
+              border: `1px solid ${world.borderSubtle}`,
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.82rem',
+              color: world.textSecondary,
+            }}
+          >
+            <Sparkles size={14} color={world.accent} />
+            <span>
+              <strong>Bundled first-party artworks</strong> created for Kin Studio — explore, view details, or pin directly to your Art Room.
+            </span>
+          </div>
         </div>
 
         {/* Archive Grid */}
@@ -89,26 +246,26 @@ export const ArchiveScreen: React.FC = () => {
             gap: '24px',
           }}
         >
-          {KIN_ARCHIVE_ASSETS.map((item, index) => (
-            <PigmentBloom key={item.id} delay={index * 60}>
+          {filteredAssets.map((item, index) => (
+            <PigmentBloom key={item.id} delay={Math.min(index * 30, 300)}>
               <button
-                onClick={() => setSelectedItem(item)}
+                onClick={() => handleSelectCard(item)}
                 style={{
                   width: '100%',
                   background: 'none',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-lg)',
+                  border: `1.5px solid ${world.border}`,
+                  borderRadius: 'var(--radius-xl)',
                   cursor: 'pointer',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
-                  backgroundColor: 'var(--color-surface)',
+                  backgroundColor: world.surface,
                   boxShadow: 'var(--shadow-subtle)',
-                  transition: 'transform 200ms cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 150ms ease',
+                  transition: 'transform 200ms cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 150ms ease, border-color 150ms ease',
                   textAlign: 'left',
                   padding: 0,
                 }}
-                className="double-outline-card archive-card"
+                className={`double-outline-card archive-card ${bloomingItemId === item.id ? 'pigment-bloom-active' : ''}`}
                 aria-label={`View archive item: ${item.title}`}
               >
                 <div style={{ padding: '12px 12px 0 12px' }}>
@@ -120,12 +277,22 @@ export const ArchiveScreen: React.FC = () => {
                     maxHeight="240px"
                   />
                 </div>
-                <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    flex: 1,
+                    backgroundColor: world.surfaceElevated,
+                    borderTop: `1px solid ${world.borderSubtle}`,
+                  }}
+                >
                   <div
                     style={{
-                      fontSize: '0.65rem',
+                      fontSize: '0.68rem',
                       fontWeight: 700,
-                      color: 'var(--color-secondary)',
+                      color: world.accent,
                       letterSpacing: '0.08em',
                       textTransform: 'uppercase',
                     }}
@@ -136,8 +303,8 @@ export const ArchiveScreen: React.FC = () => {
                     style={{
                       fontFamily: 'var(--font-display)',
                       fontSize: '1rem',
-                      fontWeight: 600,
-                      color: 'var(--color-primary)',
+                      fontWeight: 700,
+                      color: world.textPrimary,
                       margin: 0,
                       lineHeight: 1.3,
                     }}
@@ -147,14 +314,14 @@ export const ArchiveScreen: React.FC = () => {
                   <p
                     style={{
                       fontSize: '0.78rem',
-                      color: 'var(--color-text-secondary)',
+                      color: world.textSecondary,
                       margin: 0,
                       lineHeight: 1.5,
                     }}
                   >
                     {item.medium}
                   </p>
-                  {item.role && <Badge label={item.role} variant="muted" />}
+                  {item.role && <Badge label={item.role} variant="secondary" />}
                 </div>
               </button>
             </PigmentBloom>

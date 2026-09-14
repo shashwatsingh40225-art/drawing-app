@@ -1,6 +1,7 @@
 import React from 'react';
 import { useCollectionStore } from '../../stores/collectionStore';
-import { Search, Star, X, SlidersHorizontal, Folder } from 'lucide-react';
+import { Search, Star, X, Folder } from 'lucide-react';
+import { worlds } from '../../styles/tokens';
 
 export interface FilterState {
   medium: string;
@@ -47,6 +48,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   totalCount,
   filteredCount,
 }) => {
+  const world = worlds.magentaCreature;
   const { collections } = useCollectionStore();
 
   const isFiltered =
@@ -71,15 +73,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     <div
       className="filter-bar-container"
       style={{
-        backgroundColor: 'var(--color-surface)',
+        backgroundColor: world.surface,
         borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--color-border)',
-        padding: '16px 20px',
+        border: `1px solid ${world.border}`,
+        padding: '14px 18px',
         marginBottom: '28px',
         boxShadow: 'var(--shadow-subtle)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '14px',
+        gap: '12px',
       }}
     >
       {/* Top Filter Controls */}
@@ -88,7 +90,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           display: 'flex',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '12px',
+          gap: '10px',
           justifyContent: 'space-between',
         }}
       >
@@ -98,15 +100,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            backgroundColor: 'var(--color-background)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '7px 12px',
+            backgroundColor: '#FFFFFF',
+            border: `1px solid ${world.border}`,
+            borderRadius: 'var(--radius-pill)',
+            padding: '6px 14px',
             flex: '1 1 220px',
             maxWidth: '340px',
           }}
         >
-          <Search size={16} color="var(--color-text-secondary)" />
+          <Search size={15} color={world.textMuted} />
           <input
             type="text"
             value={filters.searchTag}
@@ -117,8 +119,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               background: 'transparent',
               outline: 'none',
               width: '100%',
-              fontSize: '0.88rem',
-              color: 'var(--color-text-primary)',
+              fontSize: '0.86rem',
+              color: world.textPrimary,
               fontFamily: 'var(--font-body)',
             }}
           />
@@ -128,7 +130,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                color: 'var(--color-text-secondary)',
+                color: world.textMuted,
                 cursor: 'pointer',
                 padding: 0,
                 display: 'flex',
@@ -145,14 +147,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           value={filters.medium}
           onChange={(e) => onChange({ ...filters, medium: e.target.value })}
           style={{
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border)',
-            backgroundColor: 'var(--color-background)',
-            color: 'var(--color-text-primary)',
-            fontSize: '0.88rem',
+            padding: '7px 14px',
+            borderRadius: 'var(--radius-pill)',
+            border: `1px solid ${world.border}`,
+            backgroundColor: '#FFFFFF',
+            color: world.textPrimary,
+            fontSize: '0.84rem',
             fontFamily: 'var(--font-body)',
+            fontWeight: 500,
             cursor: 'pointer',
+            boxShadow: 'var(--shadow-subtle)',
           }}
           aria-label="Filter by medium"
         >
@@ -168,14 +172,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           value={filters.status}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
           style={{
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border)',
-            backgroundColor: 'var(--color-background)',
-            color: 'var(--color-text-primary)',
-            fontSize: '0.88rem',
+            padding: '7px 14px',
+            borderRadius: 'var(--radius-pill)',
+            border: `1px solid ${world.border}`,
+            backgroundColor: '#FFFFFF',
+            color: world.textPrimary,
+            fontSize: '0.84rem',
             fontFamily: 'var(--font-body)',
+            fontWeight: 500,
             cursor: 'pointer',
+            boxShadow: 'var(--shadow-subtle)',
           }}
           aria-label="Filter by status"
         >
@@ -191,14 +197,16 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           value={filters.collectionId}
           onChange={(e) => onChange({ ...filters, collectionId: e.target.value })}
           style={{
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border)',
-            backgroundColor: 'var(--color-background)',
-            color: 'var(--color-text-primary)',
-            fontSize: '0.88rem',
+            padding: '7px 14px',
+            borderRadius: 'var(--radius-pill)',
+            border: `1px solid ${world.border}`,
+            backgroundColor: '#FFFFFF',
+            color: world.textPrimary,
+            fontSize: '0.84rem',
             fontFamily: 'var(--font-body)',
+            fontWeight: 500,
             cursor: 'pointer',
+            boxShadow: 'var(--shadow-subtle)',
           }}
           aria-label="Filter by collection"
         >
@@ -218,41 +226,43 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '8px 14px',
-            borderRadius: 'var(--radius-sm)',
-            border: filters.favoritesOnly
-              ? '1px solid var(--color-accent)'
-              : '1px solid var(--color-border)',
-            backgroundColor: filters.favoritesOnly ? 'rgba(214, 51, 122, 0.1)' : 'var(--color-background)',
-            color: filters.favoritesOnly ? 'var(--color-accent)' : 'var(--color-text-primary)',
-            fontSize: '0.88rem',
-            fontWeight: 500,
+            padding: '7px 14px',
+            borderRadius: 'var(--radius-pill)',
+            border: `1px solid ${filters.favoritesOnly ? world.accent : world.border}`,
+            backgroundColor: filters.favoritesOnly ? world.accent : '#FFFFFF',
+            color: filters.favoritesOnly ? '#FFFFFF' : world.textPrimary,
+            fontSize: '0.84rem',
+            fontWeight: 600,
             cursor: 'pointer',
+            boxShadow: filters.favoritesOnly ? '0 2px 8px rgba(255, 45, 149, 0.25)' : 'var(--shadow-subtle)',
+            transition: 'all 180ms ease',
           }}
         >
           <Star
-            size={15}
-            fill={filters.favoritesOnly ? 'var(--color-accent)' : 'none'}
-            color={filters.favoritesOnly ? 'var(--color-accent)' : 'currentColor'}
+            size={14}
+            fill={filters.favoritesOnly ? '#FFFFFF' : 'none'}
+            color={filters.favoritesOnly ? '#FFFFFF' : world.accent}
           />
           <span>Favorites</span>
         </button>
 
         {/* Sort Dropdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>Sort:</span>
+          <span style={{ fontSize: '0.8rem', color: world.textSecondary, fontWeight: 500 }}>Sort:</span>
           <select
             value={filters.sortBy}
             onChange={(e) => onChange({ ...filters, sortBy: e.target.value as FilterState['sortBy'] })}
             style={{
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--color-border)',
-              backgroundColor: 'var(--color-background)',
-              color: 'var(--color-text-primary)',
-              fontSize: '0.88rem',
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-pill)',
+              border: `1px solid ${world.border}`,
+              backgroundColor: '#FFFFFF',
+              color: world.textPrimary,
+              fontSize: '0.84rem',
               fontFamily: 'var(--font-body)',
+              fontWeight: 500,
               cursor: 'pointer',
+              boxShadow: 'var(--shadow-subtle)',
             }}
             aria-label="Sort artworks"
           >
@@ -272,10 +282,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '10px',
-          paddingTop: '10px',
-          borderTop: '1px solid var(--color-border-subtle)',
+          paddingTop: '8px',
+          borderTop: `1px solid ${world.borderSubtle}`,
           fontSize: '0.82rem',
-          color: 'var(--color-text-secondary)',
+          color: world.textSecondary,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -291,7 +301,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 gap: '4px',
                 background: 'none',
                 border: 'none',
-                color: 'var(--color-accent)',
+                color: world.accent,
                 cursor: 'pointer',
                 fontWeight: 600,
                 fontSize: '0.82rem',
@@ -311,17 +321,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            background: 'transparent',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '5px 12px',
-            color: 'var(--color-secondary)',
+            background: world.surface,
+            border: `1px solid ${world.border}`,
+            borderRadius: 'var(--radius-pill)',
+            padding: '5px 14px',
+            color: world.textSecondary,
             fontSize: '0.82rem',
             fontWeight: 600,
             cursor: 'pointer',
           }}
         >
-          <Folder size={14} />
+          <Folder size={14} color={world.accent} />
           <span>Manage Collections ({collections.length})</span>
         </button>
       </div>

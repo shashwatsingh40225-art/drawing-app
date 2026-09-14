@@ -480,6 +480,31 @@ button {
   }
 }
 
+@media (max-width: 640px) {
+  .nav-header-inner {
+    padding: 10px 14px !important;
+  }
+  .nav-user-email {
+    display: none !important;
+  }
+  .nav-btn-text {
+    display: none !important;
+  }
+  .nav-upload-btn {
+    padding: 7px 10px !important;
+  }
+  .archive-lightbox-card {
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100vh - 20px) !important;
+  }
+  .archive-lightbox-body {
+    padding: 14px 16px 18px !important;
+  }
+  .archive-lightbox-img-mat {
+    padding: 6px !important;
+  }
+}
+
 @media (max-width: 480px) {
   /* Even smaller adjustments for phones */
   body {
@@ -654,3 +679,246 @@ button {
     padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+/* PDF Reader Viewport Safety & Scaling */
+.react-pdf__Page {
+  position: relative !important;
+  user-select: text;
+}
+
+.react-pdf__Page__canvas {
+  display: block !important;
+  margin: 0 auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.react-pdf__Page__textContent {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  transform-origin: top left !important;
+  overflow: hidden !important;
+  pointer-events: auto;
+}
+
+.react-pdf__Page__annotations {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
+/* =========================================================
+   Visual World Token System Utilities & Presets
+   ========================================================= */
+
+/* Texture Presets */
+.world-texture-ruled-paper {
+  background-image: 
+    linear-gradient(90deg, rgba(214, 51, 122, 0.07) 1px, transparent 1px),
+    repeating-linear-gradient(
+      transparent,
+      transparent 27px,
+      rgba(107, 91, 77, 0.10) 28px
+    );
+  background-size: 100% 100%, 100% 28px;
+}
+
+.world-texture-parchment {
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.4) 0%, transparent 80%),
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.015) 0px, rgba(0, 0, 0, 0.015) 2px, transparent 2px, transparent 6px);
+}
+
+/* Outline Treatments */
+.world-outline-double {
+  position: relative;
+  border: 1.5px solid var(--world-accent, #FF2D95) !important;
+  box-shadow: 2.5px 2.5px 0 0 var(--world-secondary-accent, #7CFC6A);
+}
+
+.world-outline-single-hand-drawn {
+  border: 1.5px solid var(--world-border, #D9CBB5) !important;
+  border-radius: 14px 10px 15px 11px / 11px 15px 10px 14px;
+}
+
+.world-outline-glow {
+  border: 1px solid var(--world-accent, #FF4081) !important;
+  box-shadow: 0 0 20px rgba(255, 64, 129, 0.22);
+}
+
+.world-outline-single {
+  border: 1.5px solid var(--world-accent, #1A1A1A) !important;
+}
+
+/* Authored Motion Moments */
+
+/* 1. Pigment Bloom micro-interaction (150–250ms) */
+@keyframes pigment-bloom-pulse {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(255, 45, 149, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 8px rgba(255, 45, 149, 0.15);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 45, 149, 0);
+  }
+}
+
+.pigment-bloom-active {
+  animation: pigment-bloom-pulse 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Quick Access Cards Tactile States */
+.quick-access-card {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 180ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.quick-access-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 0 0 var(--world-secondary-accent, #7CFC6A), 0 8px 24px rgba(36, 19, 41, 0.08) !important;
+}
+
+.quick-access-card:active {
+  transform: scale(0.98);
+}
+
+
+/* 2. Paper Shuffle micro-interaction (150–250ms) */
+@keyframes paper-shuffle-action {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  40% {
+    transform: rotate(-1.5deg) translateY(-3px) scale(1.01);
+  }
+  75% {
+    transform: rotate(1deg) translateY(-1px);
+  }
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+}
+
+.paper-shuffle-active {
+  animation: paper-shuffle-action 220ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Motion Presets */
+@keyframes motion-flutter {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2px) rotate(0.8deg); }
+}
+
+@keyframes motion-wobble {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-1.2deg); }
+  75% { transform: rotate(1.2deg); }
+}
+
+@keyframes motion-drift-slow {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(2px, -3px); }
+}
+
+@keyframes motion-line-reveal {
+  0% { opacity: 0.85; transform: scaleX(0.98); }
+  100% { opacity: 1; transform: scaleX(1); }
+}
+
+.motion-flutter:hover {
+  animation: motion-flutter 1.8s ease-in-out infinite;
+}
+
+.motion-wobble:hover {
+  animation: motion-wobble 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.motion-drift-slow {
+  animation: motion-drift-slow 6s ease-in-out infinite;
+}
+
+/* Reduced Motion Fallback for All Authored Motions */
+@media (prefers-reduced-motion: reduce) {
+  .pigment-bloom-active,
+  .paper-shuffle-active,
+  .motion-flutter,
+  .motion-flutter:hover,
+  .motion-wobble,
+  .motion-wobble:hover,
+  .motion-drift-slow,
+  .motion-line-reveal,
+  .double-outline-btn,
+  .archive-card:hover {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* =========================================================
+   Kin Reader Layering & Quiet Reading Mode
+   ========================================================= */
+
+/* Reading Layer: High contrast, stable, strictly un-animated PDF canvas & text */
+.reader-reading-layer {
+  position: relative;
+  background-color: #FFFFFF;
+  box-shadow: 0 8px 30px rgba(35, 23, 16, 0.14);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  user-select: text;
+}
+
+/* Kin Layer: Surrounding chrome, atmospheric canvas, and transitions */
+.reader-kin-chrome {
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1), transform 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reader-kin-chrome-faded {
+  opacity: 0.15 !important;
+}
+
+.reader-kin-chrome-faded:hover,
+.reader-kin-chrome-faded:focus-within {
+  opacity: 1 !important;
+}
+
+/* Page turn transition in Kin layer (<100ms subtle fade, zero canvas transform) */
+.page-turn-transition {
+  animation: page-turn-fade 90ms ease-out;
+}
+
+@keyframes page-turn-fade {
+  0% {
+    opacity: 0.92;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Quiet Reading Mode: Strips animations completely across reader */
+.quiet-reading-active,
+.quiet-reading-active * {
+  animation: none !important;
+  transition: none !important;
+}
+
+.quiet-reading-active .reader-reading-layer {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
+  border-color: #D9CBB5 !important;
+}
+
+.quiet-reading-active .page-turn-transition {
+  animation: none !important;
+  transform: none !important;
+}
+
+
+

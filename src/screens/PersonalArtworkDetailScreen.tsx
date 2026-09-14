@@ -29,6 +29,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
   const { artworks, toggleFavorite, softDeleteArtwork, restoreArtwork, fetchArtworks } = useArtworkStore();
   const { collections, fetchCollections } = useCollectionStore();
   const { showToast } = useToastStore();
+  const { addItem: addArtRoomItem } = useArtRoomStore();
 
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -87,8 +88,6 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
       },
     });
   };
-
-  const { addItem: addArtRoomItem } = useArtRoomStore();
 
   const handleSendToArtRoom = async () => {
     if (!artwork) return;

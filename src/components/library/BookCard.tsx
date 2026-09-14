@@ -5,6 +5,7 @@ import { Book } from '../../types/book';
 import { useReadingProgressStore } from '../../stores/readingProgressStore';
 import { Badge } from '../ui/Badge';
 import { formatDate } from '../../utils/dates';
+import { worlds, motionTiming } from '../../styles/tokens';
 
 interface BookCardProps {
   book: Book;
@@ -17,8 +18,22 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
   const progress = getProgress(book.id);
 
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [isShuffling, setIsShuffling] = React.useState(false);
 
+  const world = worlds.inkStudy;
   const coverUrl = book.cover_thumbnail_path || book.cover_image_path;
+
+  const handleRead = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      navigate(`/reader/${book.id}`);
+      return;
+    }
+    setIsShuffling(true);
+    setTimeout(() => {
+      navigate(`/reader/${book.id}`);
+    }, motionTiming.microInteraction.durationMs);
+  };
 
   const getProgressLabel = () => {
     if (!progress || progress.current_page <= 1) {
@@ -38,35 +53,39 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
 
   return (
     <div
-      className="card-surface"
+      className={`card-surface ${isShuffling ? 'paper-shuffle-active' : ''}`}
       style={{
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 'var(--radius-xl)',
-        border: '1px solid var(--color-border)',
+        border: `1.5px solid ${world.border}`,
+        backgroundColor: world.surface,
         overflow: 'hidden',
-        transition: 'transform 200ms ease, box-shadow 200ms ease',
+        transition: 'transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease, border-color 200ms ease',
         position: 'relative',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-3px)';
-        e.currentTarget.style.boxShadow = 'var(--shadow-card)';
+        e.currentTarget.style.boxShadow = '0 10px 24px rgba(35, 23, 16, 0.12)';
+        e.currentTarget.style.borderColor = world.accent;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
         e.currentTarget.style.boxShadow = 'var(--shadow-subtle)';
+        e.currentTarget.style.borderColor = world.border;
         setMenuOpen(false);
       }}
     >
       {/* Cover Container */}
       <Link
         to={`/reader/${book.id}`}
+        onClick={handleRead}
         style={{
           display: 'block',
           position: 'relative',
           width: '100%',
           aspectRatio: '4 / 3',
-          backgroundColor: 'var(--color-primary-dark)',
+          backgroundColor: '#1E120D',
           overflow: 'hidden',
           textDecoration: 'none',
         }}
@@ -97,8 +116,9 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
               justifyContent: 'center',
               padding: '24px',
               textAlign: 'center',
-              background: 'linear-gradient(135deg, #2A1430 0%, #44244C 50%, #221226 100%)',
-              color: 'var(--color-text-on-dark)',
+              background: 'linear-gradient(135deg, #2A1A14 0%, #3D261C 50%, #1E120D 100%)',
+              color: '#F8F1E3',
+              boxShadow: 'inset 0 0 0 1px rgba(217, 203, 181, 0.22)',
             }}
           >
             <div
@@ -106,15 +126,15 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                 width: '44px',
                 height: '44px',
                 borderRadius: 'var(--radius-full)',
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
+                backgroundColor: 'rgba(217, 203, 181, 0.12)',
+                border: '1px solid rgba(217, 203, 181, 0.28)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: '12px',
               }}
             >
-              <BookOpen size={20} color="var(--color-text-on-dark)" />
+              <BookOpen size={20} color="#F8F1E3" />
             </div>
             <div
               style={{
@@ -128,6 +148,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
+                color: '#F8F1E3',
               }}
             >
               {book.title}
@@ -172,7 +193,16 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
       </Link>
 
       {/* Book Metadata & Actions */}
-      <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div
+        style={{
+          padding: '18px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          backgroundColor: world.surfaceElevated,
+          borderTop: `1px solid ${world.borderSubtle}`,
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h3
@@ -181,7 +211,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                 fontFamily: 'var(--font-display)',
                 fontSize: '1.05rem',
                 fontWeight: 700,
-                color: 'var(--color-primary)',
+                color: world.textPrimary,
                 lineHeight: 1.3,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -193,9 +223,10 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                 style={{
                   color: 'inherit',
                   textDecoration: 'none',
+                  transition: 'color 150ms ease',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-secondary)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'inherit')}
+                onMouseEnter={(e) => (e.currentTarget.style.color = world.accent)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = world.textPrimary)}
               >
                 {book.title}
               </Link>
@@ -204,7 +235,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
               style={{
                 margin: 0,
                 fontSize: '0.82rem',
-                color: 'var(--color-text-secondary)',
+                color: world.textSecondary,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -223,7 +254,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: 'var(--color-text-muted)',
+                color: world.textMuted,
                 padding: '4px',
                 borderRadius: 'var(--radius-sm)',
                 display: 'flex',
@@ -241,10 +272,10 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                   position: 'absolute',
                   top: '100%',
                   right: 0,
-                  backgroundColor: 'var(--color-surface-elevated)',
-                  border: '1px solid var(--color-border)',
+                  backgroundColor: world.surfaceElevated,
+                  border: `1px solid ${world.border}`,
                   borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-card)',
+                  boxShadow: '0 8px 24px rgba(35, 23, 16, 0.14)',
                   zIndex: 20,
                   minWidth: '140px',
                   padding: '4px 0',
@@ -263,7 +294,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                     fontSize: '0.82rem',
                     background: 'none',
                     border: 'none',
-                    color: 'var(--color-text-primary)',
+                    color: world.textPrimary,
                     cursor: 'pointer',
                   }}
                 >
@@ -306,7 +337,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
             alignItems: 'center',
             gap: '6px',
             fontSize: '0.74rem',
-            color: 'var(--color-text-muted)',
+            color: world.textMuted,
             marginTop: '12px',
           }}
         >
@@ -316,8 +347,9 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
 
         {/* CTA */}
         <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-          <Link
-            to={`/reader/${book.id}`}
+          <button
+            type="button"
+            onClick={handleRead}
             className="btn-primary"
             style={{
               flex: 1,
@@ -328,26 +360,42 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
               padding: '8px 14px',
               fontSize: '0.82rem',
               fontWeight: 600,
-              textDecoration: 'none',
+              border: 'none',
+              cursor: 'pointer',
               borderRadius: 'var(--radius-pill)',
+              backgroundColor: world.accent,
+              color: '#FFFFFF',
+              transition: 'background-color 150ms ease, transform 150ms ease',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = world.secondaryAccent)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = world.accent)}
           >
             <BookOpen size={14} />
             <span>Read</span>
-          </Link>
+          </button>
           <Link
             to={`/library/${book.id}`}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px 12px',
+              padding: '8px 14px',
               fontSize: '0.82rem',
-              color: 'var(--color-text-secondary)',
-              border: '1px solid var(--color-border)',
+              fontWeight: 500,
+              color: world.textSecondary,
+              border: `1px solid ${world.border}`,
               borderRadius: 'var(--radius-pill)',
               textDecoration: 'none',
               backgroundColor: 'transparent',
+              transition: 'background-color 150ms ease, color 150ms ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(139, 74, 43, 0.08)';
+              e.currentTarget.style.color = world.textPrimary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = world.textSecondary;
             }}
           >
             Info

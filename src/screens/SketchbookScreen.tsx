@@ -11,8 +11,10 @@ import { UploadCloud, Palette, Download } from 'lucide-react';
 import { exportAllData } from '../services/exportService';
 import { PageTransition } from '../components/motion/PageTransition';
 import { PigmentBloom } from '../components/motion/PigmentBloom';
+import { worlds } from '../styles/tokens';
 
 export const SketchbookScreen: React.FC = () => {
+  const world = worlds.magentaCreature;
   const navigate = useNavigate();
   const { artworks, loading, fetchArtworks } = useArtworkStore();
   const { fetchCollections } = useCollectionStore();
@@ -108,31 +110,39 @@ export const SketchbookScreen: React.FC = () => {
                 onClick={exportAllData}
                 className="double-outline-btn"
                 style={{
-                  padding: '9px 14px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'var(--color-surface)',
-                  color: 'var(--color-text-primary)',
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: `1px solid ${world.border}`,
+                  backgroundColor: world.surface,
+                  color: world.textSecondary,
                   fontSize: '0.85rem',
+                  fontWeight: 500,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
                   cursor: 'pointer',
+                  transition: 'all var(--transition-fast)',
                 }}
                 title="Export all artwork data as JSON"
               >
-                <Download size={15} />
+                <Download size={14} />
                 <span>Export</span>
               </button>
               <button
                 onClick={() => navigate('/upload')}
-                className="btn-primary double-outline-btn"
+                className="btn-accent double-outline-btn"
                 style={{
-                  padding: '10px 20px',
+                  padding: '9px 20px',
                   fontSize: '0.9rem',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
+                  backgroundColor: world.accent,
+                  color: '#FFFFFF',
+                  border: `1px solid ${world.accent}`,
+                  borderRadius: 'var(--radius-pill)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
                 }}
               >
                 <UploadCloud size={16} />
@@ -221,7 +231,7 @@ export const SketchbookScreen: React.FC = () => {
             className="sketchbook-grid artwork-gallery-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
               gap: '24px',
             }}
           >

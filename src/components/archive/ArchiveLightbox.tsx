@@ -1,6 +1,8 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X, LayoutGrid } from 'lucide-react';
 import { KinArchiveAsset } from '../../types/archive';
+import { worlds } from '../../styles/tokens';
 
 interface ArchiveLightboxProps {
   asset: KinArchiveAsset;
@@ -12,95 +14,156 @@ export const ArchiveLightbox: React.FC<ArchiveLightboxProps> = ({
   asset,
   onClose,
   onPinToArtRoom,
-}) => (
-  <div
-    style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 10000,
-      backgroundColor: 'rgba(36, 19, 41, 0.85)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px',
-      overflow: 'auto',
-    }}
-    onClick={onClose}
-  >
+}) => {
+  const world = worlds.magentaCreature;
+
+  const content = (
     <div
-      onClick={(e) => e.stopPropagation()}
       style={{
-        maxWidth: '680px',
-        width: '100%',
-        backgroundColor: 'var(--color-surface)',
-        borderRadius: 'var(--radius-xl)',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-modal)',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10000,
+        backgroundColor: 'rgba(26, 14, 28, 0.85)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        padding: '16px 12px',
+        overflowY: 'auto',
       }}
+      onClick={onClose}
     >
-      {/* Close button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 16px 0' }}>
-        <button onClick={onClose} aria-label="Close" style={{ padding: '6px', background: 'none', border: 'none', cursor: 'pointer' }}>
-          <X size={20} color="var(--color-text-secondary)" />
-        </button>
-      </div>
-
-      {/* Image */}
-      <div style={{ padding: '0 24px', textAlign: 'center' }}>
-        <img
-          src={asset.filename}
-          alt={asset.alt_text}
-          className="artwork-img-blend"
-          style={{
-            maxWidth: '100%',
-            maxHeight: '60vh',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-border)',
-          }}
-        />
-      </div>
-
-      {/* Metadata */}
-      <div style={{ padding: '20px 24px 24px' }}>
-        <div style={{
-          fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.08em', color: 'var(--color-secondary)', marginBottom: '6px',
-        }}>
-          {asset.code} · Kin Archive
-        </div>
-        <h3 style={{
-          fontFamily: 'var(--font-display)', color: 'var(--color-primary)',
-          fontSize: '1.25rem', marginBottom: '8px',
-        }}>
-          {asset.title}
-        </h3>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.88rem', marginBottom: '12px' }}>
-          {asset.description}
-        </p>
-        <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
-          <strong>Medium:</strong> {asset.medium}
-        </div>
-
-        {/* Tags */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '20px' }}>
-          {asset.tags.map((tag) => (
-            <span key={tag} className="tag-chip">{tag}</span>
-          ))}
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: '10px' }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="archive-lightbox-card"
+        style={{
+          maxWidth: '640px',
+          maxHeight: 'calc(100vh - 32px)',
+          width: '100%',
+          margin: 'auto',
+          backgroundColor: world.surface,
+          borderRadius: 'var(--radius-xl)',
+          overflowY: 'auto',
+          border: `1.5px solid ${world.accent}`,
+          boxShadow: `4px 4px 0 0 ${world.secondaryAccent}, 0 24px 60px rgba(26, 14, 28, 0.45)`,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Close button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 16px 4px' }}>
           <button
-            className="btn-primary double-outline-btn"
-            style={{ padding: '10px 18px', fontSize: '0.88rem' }}
-            onClick={() => onPinToArtRoom(asset)}
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              padding: '6px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: world.textSecondary,
+              borderRadius: 'var(--radius-full)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            <LayoutGrid size={15} />
-            <span>Pin to Art Room</span>
+            <X size={20} />
           </button>
+        </div>
+
+        {/* Image inside museum mat */}
+        <div style={{ padding: '0 24px', textAlign: 'center' }}>
+          <div
+            className="archive-lightbox-img-mat"
+            style={{
+              display: 'inline-block',
+              backgroundColor: '#FFFFFF',
+              padding: '12px',
+              borderRadius: 'var(--radius-lg)',
+              border: `1px solid ${world.border}`,
+              boxShadow: '0 8px 24px rgba(35, 23, 16, 0.08)',
+              maxWidth: '100%',
+            }}
+          >
+            <img
+              src={asset.filename}
+              alt={asset.alt_text}
+              className="artwork-img-blend"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '42vh',
+                borderRadius: 'var(--radius-sm)',
+                display: 'block',
+                margin: '0 auto',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Metadata */}
+        <div className="archive-lightbox-body" style={{ padding: '20px 28px 26px' }}>
+          <div
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              color: world.accent,
+              marginBottom: '6px',
+            }}
+          >
+            {asset.code} · Kin Archive
+          </div>
+          <h3
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: world.textPrimary,
+              fontSize: '1.25rem',
+              marginBottom: '8px',
+              marginTop: 0,
+            }}
+          >
+            {asset.title}
+          </h3>
+          <p style={{ color: world.textSecondary, fontSize: '0.88rem', marginBottom: '12px', lineHeight: 1.5 }}>
+            {asset.description}
+          </p>
+          <div style={{ fontSize: '0.82rem', color: world.textMuted, marginBottom: '16px' }}>
+            <strong>Medium:</strong> {asset.medium}
+          </div>
+
+          {/* Tags */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '22px' }}>
+            {asset.tags.map((tag) => (
+              <span key={tag} className="tag-chip">
+                #{tag}
+              </span>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              className="btn-accent double-outline-btn"
+              style={{
+                padding: '10px 20px',
+                fontSize: '0.88rem',
+                backgroundColor: world.accent,
+                borderColor: world.accent,
+                borderRadius: 'var(--radius-pill)',
+                cursor: 'pointer',
+              }}
+              onClick={() => onPinToArtRoom(asset)}
+            >
+              <LayoutGrid size={15} />
+              <span>Pin to Art Room</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+
+  return createPortal(content, document.body);
+};

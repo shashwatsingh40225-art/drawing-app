@@ -15,6 +15,8 @@ import {
   StickyNote,
   Archive,
   MoreHorizontal,
+  BookOpen,
+  X,
 } from 'lucide-react';
 
 interface ReaderToolbarProps {
@@ -35,6 +37,8 @@ interface ReaderToolbarProps {
   onToggleSidebar: (sidebar: 'thumbnails' | 'bookmarks' | 'notes' | 'archive') => void;
   onFitWidth?: () => void;
   onFitPage?: () => void;
+  isQuietReading?: boolean;
+  onToggleQuietReading?: () => void;
 }
 
 export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
@@ -55,6 +59,8 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
   onToggleSidebar,
   onFitWidth,
   onFitPage,
+  isQuietReading = false,
+  onToggleQuietReading,
 }) => {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
@@ -67,6 +73,135 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  if (isQuietReading) {
+    return (
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px 16px',
+          backgroundColor: '#FAF2E9',
+          borderBottom: '1px solid var(--color-border)',
+          zIndex: 20,
+          userSelect: 'none',
+        }}
+      >
+        {/* Left: Minimal title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          {!isFocusMode && (
+            <button
+              type="button"
+              onClick={() => navigate(`/library/${bookId}`)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+                fontSize: '0.8rem',
+                padding: '4px 6px',
+                borderRadius: 'var(--radius-sm)',
+              }}
+              title="Return to Book Details"
+            >
+              <ArrowLeft size={15} />
+            </button>
+          )}
+          <span
+            style={{
+              fontSize: '0.86rem',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: isMobile ? '75px' : '280px',
+            }}
+            title={bookTitle}
+          >
+            {bookTitle}
+          </span>
+        </div>
+
+        {/* Center: Bare Page Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '4px' : '8px' }}>
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: isMobile ? '4px 6px' : '4px 8px',
+              cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+              opacity: currentPage <= 1 ? 0.3 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              color: 'var(--color-text-primary)',
+            }}
+            title="Previous Page (Left Arrow)"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
+            {isMobile ? `${currentPage} / ${totalPages || 1}` : `Page ${currentPage} of ${totalPages || 1}`}
+          </span>
+          <button
+            type="button"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: isMobile ? '4px 6px' : '4px 8px',
+              cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+              opacity: currentPage >= totalPages ? 0.3 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              color: 'var(--color-text-primary)',
+            }}
+            title="Next Page (Right Arrow)"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+
+        {/* Right: Exit Quiet Reading */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onToggleQuietReading && (
+            <button
+              type="button"
+              onClick={onToggleQuietReading}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: 'var(--radius-pill)',
+                border: '1px solid var(--color-primary)',
+                backgroundColor: 'var(--color-primary)',
+                color: 'var(--color-text-on-dark)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              title="Exit Quiet Reading Mode"
+            >
+              <X size={14} />
+              <span>Exit Quiet</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -84,7 +219,7 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
       }}
     >
       {/* Left: Back & Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '4px' : '12px', minWidth: 0 }}>
         {!isFocusMode && (
           <button
             type="button"
@@ -92,33 +227,33 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '4px',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
               color: 'var(--color-text-secondary)',
               fontSize: '0.85rem',
               fontWeight: 500,
-              padding: '6px 8px',
+              padding: isMobile ? '5px 4px' : '6px 8px',
               borderRadius: 'var(--radius-sm)',
             }}
             title="Return to Book Details"
           >
             <ArrowLeft size={16} />
-            <span>Details</span>
+            {!isMobile && <span>Details</span>}
           </button>
         )}
 
         <div
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: '1rem',
+            fontSize: isMobile ? '0.85rem' : '1rem',
             fontWeight: 700,
             color: 'var(--color-primary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            maxWidth: isMobile ? '130px' : (isFocusMode ? '400px' : '280px'),
+            maxWidth: isMobile ? '65px' : (isFocusMode ? '400px' : '280px'),
           }}
           title={bookTitle}
         >
@@ -127,7 +262,7 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
       </div>
 
       {/* Center: Page Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '4px' : '8px' }}>
         <button
           type="button"
           onClick={() => onPageChange(currentPage - 1)}
@@ -136,7 +271,7 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
             background: 'none',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)',
-            padding: '5px 8px',
+            padding: isMobile ? '4px 6px' : '5px 8px',
             cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
             opacity: currentPage <= 1 ? 0.35 : 1,
             display: 'flex',
@@ -148,8 +283,8 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           <ChevronLeft size={16} />
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.86rem', fontWeight: 600 }}>
-          <span>Page</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '3px' : '6px', fontSize: '0.84rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+          {!isMobile && <span>Page</span>}
           <input
             type="number"
             min={1}
@@ -157,19 +292,19 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
             value={currentPage}
             onChange={(e) => onPageChange(parseInt(e.target.value) || 1)}
             style={{
-              width: '46px',
+              width: isMobile ? '34px' : '46px',
               textAlign: 'center',
-              padding: '3px 4px',
+              padding: '3px 2px',
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-sm)',
-              fontSize: '0.86rem',
+              fontSize: '0.84rem',
               fontFamily: 'inherit',
               fontWeight: 600,
               color: 'var(--color-text-primary)',
               backgroundColor: 'var(--color-surface-elevated)',
             }}
           />
-          <span style={{ color: 'var(--color-text-muted)' }}>of {totalPages || 1}</span>
+          <span style={{ color: 'var(--color-text-muted)' }}>/ {totalPages || 1}</span>
         </div>
 
         <button
@@ -180,7 +315,7 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
             background: 'none',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)',
-            padding: '5px 8px',
+            padding: isMobile ? '4px 6px' : '5px 8px',
             cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
             opacity: currentPage >= totalPages ? 0.35 : 1,
             display: 'flex',
@@ -217,6 +352,30 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           >
             <BookmarkIcon size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
           </button>
+
+          {/* Quiet Reading Toggle */}
+          {onToggleQuietReading && (
+            <button
+              type="button"
+              onClick={onToggleQuietReading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'transparent',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-pill)',
+                padding: '5px 9px',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+              }}
+              title="Quiet Reading Mode"
+            >
+              <BookOpen size={14} />
+            </button>
+          )}
 
           {/* Focus Mode (Fullscreen) */}
           <button
@@ -344,6 +503,33 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Quiet Reading in overflow */}
+              {onToggleQuietReading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleQuietReading();
+                    setOverflowOpen(false);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'transparent',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '7px 10px',
+                    cursor: 'pointer',
+                    color: 'var(--color-text-secondary)',
+                    fontSize: '0.82rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  <BookOpen size={15} />
+                  <span>Quiet Reading</span>
+                </button>
               )}
 
               {/* Add Note Button */}
@@ -506,6 +692,31 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           )}
 
           <div style={{ width: '1px', height: '18px', backgroundColor: 'var(--color-border)', margin: '0 4px' }} />
+
+          {/* Quiet Reading Mode Toggle */}
+          {onToggleQuietReading && (
+            <button
+              type="button"
+              onClick={onToggleQuietReading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(58, 33, 64, 0.04)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-pill)',
+                padding: '5px 12px',
+                cursor: 'pointer',
+                color: 'var(--color-primary)',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+              }}
+              title="Quiet Reading Mode (removes distractions and animations)"
+            >
+              <BookOpen size={14} />
+              <span>Quiet Reading</span>
+            </button>
+          )}
 
           {/* Bookmark Toggle */}
           <button
