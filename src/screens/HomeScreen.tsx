@@ -17,6 +17,7 @@ import { useCollectionStore } from '../stores/collectionStore';
 import { ArtworkCard } from '../components/sketchbook/ArtworkCard';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState } from '../components/ui/EmptyState';
+import { PageTransition } from '../components/motion/PageTransition';
 
 interface HomeScreenProps {
   onStartUpload?: () => void;
@@ -62,42 +63,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     if (artworks.length === 0) {
       return (
-        <div className="fade-in" style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
-          <PageHeader
-            icon={<Palette size={16} />}
-            eyebrowLabel="Studio Dashboard"
-            title="Welcome to your studio"
-            description="Your personal sketchbook is ready for your drawings, studies, and creature folios."
-            action={
-              <button
-                onClick={handleUploadClick}
-                className="btn-primary double-outline-btn"
-                style={{
-                  padding: '10px 20px',
-                  fontSize: '0.9rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <UploadCloud size={16} />
-                <span>Upload First Drawing</span>
-              </button>
-            }
-          />
-          <EmptyState
-            artworkSrc="/artist-reference/art-01.jpeg"
-            headline="Your sketchbook is waiting"
-            description="Upload your first drawing to start tracking your artistic journey, tags, and discovering kindred art."
-            actionLabel="Upload First Drawing"
-            onAction={handleUploadClick}
-          />
-        </div>
+        <PageTransition>
+          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+            <PageHeader
+              icon={<Palette size={16} />}
+              eyebrowLabel="Studio Dashboard"
+              title="Welcome to your studio"
+              description="Your personal sketchbook is ready for your drawings, studies, and creature folios."
+              action={
+                <button
+                  onClick={handleUploadClick}
+                  className="btn-primary double-outline-btn"
+                  style={{
+                    padding: '10px 20px',
+                    fontSize: '0.9rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <UploadCloud size={16} />
+                  <span>Upload First Drawing</span>
+                </button>
+              }
+            />
+            <EmptyState
+              artworkSrc="/artist-reference/art-01.jpeg"
+              headline="Your sketchbook is waiting"
+              description="Upload your first drawing to start tracking your artistic journey, tags, and discovering kindred art."
+              actionLabel="Upload First Drawing"
+              onAction={handleUploadClick}
+            />
+          </div>
+        </PageTransition>
       );
     }
 
     return (
-      <div className="fade-in" style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+      <PageTransition>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
         {/* Studio Dashboard Header */}
         <PageHeader
           icon={<Palette size={16} />}
@@ -472,28 +476,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
         </section>
       </div>
-    );
-  }
+    </PageTransition>
+  );
+}
 
   // -------------------------------------------------------------
   // Unauthenticated Visitors Landing Page (Unchanged)
   // -------------------------------------------------------------
   return (
-    <div className="fade-in" style={{ paddingBottom: '80px' }}>
-      {/* Hero Section */}
-      <section 
-        style={{
-          maxWidth: '1280px',
-          margin: '0 auto',
-          padding: '48px 24px 64px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          alignItems: 'center',
-          gap: '48px',
-        }}
-      >
-        {/* Left Column: Headline & Value Proposition */}
-        <div style={{ maxWidth: '580px' }}>
+    <PageTransition>
+      <div style={{ paddingBottom: '80px' }}>
+        {/* Hero Section */}
+        <section 
+          style={{
+            maxWidth: '1280px',
+            margin: '0 auto',
+            padding: '48px 24px 64px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            alignItems: 'center',
+            gap: '48px',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            className="hero-atmosphere"
+            style={{ backgroundImage: 'url(/artist-reference/art-03.jpeg)' }}
+          />
+          {/* Left Column: Headline & Value Proposition */}
+          <div style={{ maxWidth: '580px' }}>
           {/* Eyebrow badge */}
           <div 
             style={{
@@ -728,5 +740,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </section>
     </div>
-  );
+  </PageTransition>
+);
 };

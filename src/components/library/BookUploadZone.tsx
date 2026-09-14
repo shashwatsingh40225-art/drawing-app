@@ -122,8 +122,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
         file_path: filePath,
         file_size_bytes: selectedFile.size,
         page_count: null, // Will be updated on first render in PDF reader
-        cover_thumbnail_path: signedUrl || null,
-        cover_image_path: signedUrl || null,
+        cover_thumbnail_path: null,
         tags,
       });
 

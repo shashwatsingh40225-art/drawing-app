@@ -99,6 +99,7 @@ export const ArtRoomCanvas: React.FC<ArtRoomCanvasProps> = ({
   return (
     <div
       ref={canvasRef}
+      className="ruled-paper-pattern"
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onClick={() => onSelectItem(null)}
@@ -134,6 +135,21 @@ export const ArtRoomCanvas: React.FC<ArtRoomCanvasProps> = ({
       >
         Kin Studio · My Art Room
       </div>
+
+      {/* Empty State */}
+      {items.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '80px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+          <img
+            src="/artist-reference/art-01.jpeg"
+            alt="Crane illustration"
+            className="artwork-img-blend"
+            style={{ width: '180px', margin: '0 auto 16px', display: 'block', opacity: 0.8 }}
+          />
+          <p style={{ color: 'var(--color-text-secondary)', fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>
+            Pin your first artwork, book plate, or Archive reference to begin.
+          </p>
+        </div>
+      )}
 
       {/* Render Canvas Items */}
       {items.map((item) => {

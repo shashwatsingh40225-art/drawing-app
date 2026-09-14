@@ -63,7 +63,7 @@ export function AppLayout() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Navigation />
-      <main style={{ flex: 1 }}>
+      <main className="screen-with-bottom-nav" style={{ flex: 1 }}>
         <Outlet />
       </main>
 

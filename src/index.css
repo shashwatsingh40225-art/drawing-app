@@ -492,5 +492,165 @@ button {
   }
 }
 
+/* ========================================
+   PHASE 2: Visual-World Enhancements
+   ======================================== */
 
+/* Ink draw-on SVG stroke animation */
+@keyframes inkDrawOn {
+  from { stroke-dashoffset: var(--path-length, 1000); }
+  to { stroke-dashoffset: 0; }
+}
 
+.ink-draw-on path,
+.ink-draw-on line,
+.ink-draw-on polyline {
+  stroke-dasharray: var(--path-length, 1000);
+  stroke-dashoffset: var(--path-length, 1000);
+  animation: inkDrawOn 1.2s var(--ease-organic) forwards;
+}
+
+/* Pigment bloom — radial fade-in with scale */
+@keyframes pigmentBloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 0.9;
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+.pigment-bloom {
+  animation: pigmentBloom 600ms var(--ease-organic) forwards;
+}
+
+/* Page transition wrapper */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 280ms var(--ease-standard) forwards;
+}
+
+/* Ruled-paper dropzone variant */
+.ruled-paper-dropzone {
+  background-color: var(--color-surface);
+  background-image:
+    repeating-linear-gradient(
+      transparent,
+      transparent 27px,
+      rgba(107, 91, 77, 0.06) 28px
+    );
+  background-size: 100% 28px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.ruled-paper-dropzone.drag-active {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(214, 51, 122, 0.12);
+}
+
+/* Hero artwork atmosphere — extremely low opacity background image */
+.hero-atmosphere {
+  position: absolute;
+  inset: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: right center;
+  opacity: 0.04;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* Mobile bottom nav bar */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px)) 0;
+  z-index: 1000;
+  box-shadow: 0 -2px 12px rgba(36, 19, 41, 0.06);
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+  }
+}
+
+.mobile-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-bottom-nav-item.active {
+  color: var(--color-primary);
+}
+
+/* Reading progress indicator */
+.reading-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  transition: width 200ms var(--ease-standard);
+  z-index: 9999;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Swipe gesture feedback */
+.swipe-feedback {
+  transition: transform 80ms ease-out;
+  will-change: transform;
+}
+
+/* Archive card hover lift */
+.archive-card {
+  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth);
+}
+
+.archive-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: var(--shadow-card);
+}
+
+/* Screen body padding for mobile bottom nav */
+@media (max-width: 768px) {
+  .screen-with-bottom-nav {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

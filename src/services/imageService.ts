@@ -1,5 +1,5 @@
 import { supabase, isSupabaseDemoMode } from '../lib/supabase';
-import { compressForDisplay, compressForThumbnail } from '../utils/image';
+import { compressForDisplay, compressForThumbnail, blobToDataUrl } from '../utils/image';
 
 interface UploadResult {
   imagePath: string;
@@ -13,19 +13,33 @@ export async function uploadArtworkImage(
   userId: string,
   artworkId: string
 ): Promise<UploadResult> {
-  // Compress to display and thumbnail sizes
-  const [displayBlob, thumbBlob] = await Promise.all([
-    compressForDisplay(file),
-    compressForThumbnail(file),
-  ]);
+  // Compress to display and thumbnail sizes with fallback to original file
+  let displayBlob: Blob = file;
+  let thumbBlob: Blob = file;
+  try {
+    const [d, t] = await Promise.all([
+      compressForDisplay(file),
+      compressForThumbnail(file),
+    ]);
+    displayBlob = d;
+    thumbBlob = t;
+  } catch (compErr) {
+    console.warn('Image compression fallback to original file:', compErr);
+    displayBlob = file;
+    thumbBlob = file;
+  }
 
   const imagePath = `${userId}/${artworkId}/display.webp`;
   const thumbnailPath = `${userId}/${artworkId}/thumb.webp`;
 
-  if (isSupabaseDemoMode) {
-    // Create persistent object URLs or base64 data URLs for demo mode
-    const displayUrl = URL.createObjectURL(displayBlob);
-    const thumbUrl = URL.createObjectURL(thumbBlob);
+  const isDemo = isSupabaseDemoMode || userId.startsWith('demo-');
+
+  if (isDemo) {
+    // Generate persistent data URLs so images persist across reloads
+    const [displayUrl, thumbUrl] = await Promise.all([
+      blobToDataUrl(displayBlob),
+      blobToDataUrl(thumbBlob),
+    ]);
 
     return {
       imagePath,
@@ -35,44 +49,72 @@ export async function uploadArtworkImage(
     };
   }
 
-  // Live Supabase upload
-  const [displayResult, thumbResult] = await Promise.all([
-    supabase.storage.from('artwork-images').upload(imagePath, displayBlob, {
-      contentType: 'image/webp',
-      upsert: true,
-    }),
-    supabase.storage.from('artwork-images').upload(thumbnailPath, thumbBlob, {
-      contentType: 'image/webp',
-      upsert: true,
-    }),
-  ]);
+  try {
+    // Live Supabase upload
+    const [displayResult, thumbResult] = await Promise.all([
+      supabase.storage.from('artwork-images').upload(imagePath, displayBlob, {
+        contentType: 'image/webp',
+        upsert: true,
+      }),
+      supabase.storage.from('artwork-images').upload(thumbnailPath, thumbBlob, {
+        contentType: 'image/webp',
+        upsert: true,
+      }),
+    ]);
 
-  if (displayResult.error) {
-    throw new Error(`Display upload failed: ${displayResult.error.message}`);
+    if (displayResult.error || thumbResult.error) {
+      console.warn('Supabase storage upload error, falling back to local data URL:', displayResult.error || thumbResult.error);
+      const [displayUrl, thumbUrl] = await Promise.all([
+        blobToDataUrl(displayBlob),
+        blobToDataUrl(thumbBlob),
+      ]);
+      return {
+        imagePath,
+        thumbnailPath,
+        imageUrl: displayUrl,
+        thumbnailUrl: thumbUrl,
+      };
+    }
+
+    // Get signed URLs (valid for 1 year)
+    const ONE_YEAR = 60 * 60 * 24 * 365;
+    const [displayUrlRes, thumbUrlRes] = await Promise.all([
+      supabase.storage.from('artwork-images').createSignedUrl(imagePath, ONE_YEAR),
+      supabase.storage.from('artwork-images').createSignedUrl(thumbnailPath, ONE_YEAR),
+    ]);
+
+    return {
+      imagePath,
+      thumbnailPath,
+      imageUrl: displayUrlRes.data?.signedUrl ?? '',
+      thumbnailUrl: thumbUrlRes.data?.signedUrl ?? '',
+    };
+  } catch (err) {
+    console.warn('Storage upload exception, falling back to data URL:', err);
+    const [displayUrl, thumbUrl] = await Promise.all([
+      blobToDataUrl(displayBlob),
+      blobToDataUrl(thumbBlob),
+    ]);
+    return {
+      imagePath,
+      thumbnailPath,
+      imageUrl: displayUrl,
+      thumbnailUrl: thumbUrl,
+    };
   }
-  if (thumbResult.error) {
-    throw new Error(`Thumbnail upload failed: ${thumbResult.error.message}`);
-  }
-
-  // Get signed URLs (valid for 1 year)
-  const [displayUrlRes, thumbUrlRes] = await Promise.all([
-    supabase.storage.from('artwork-images').createSignedUrl(imagePath, 60 * 60 * 24 * 365),
-    supabase.storage.from('artwork-images').createSignedUrl(thumbnailPath, 60 * 60 * 24 * 365),
-  ]);
-
-  return {
-    imagePath,
-    thumbnailPath,
-    imageUrl: displayUrlRes.data?.signedUrl ?? '',
-    thumbnailUrl: thumbUrlRes.data?.signedUrl ?? '',
-  };
 }
 
 export async function getImageUrl(path: string | null): Promise<string> {
   if (!path) return '';
 
-  // If path is already a static asset or blob URL, return directly
-  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('/')) {
+  // If path is already a static asset, data URL, or blob URL, return directly
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('blob:') ||
+    path.startsWith('data:') ||
+    path.startsWith('/')
+  ) {
     return path;
   }
 

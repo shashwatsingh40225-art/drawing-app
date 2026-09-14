@@ -17,3 +17,12 @@ export async function compressForThumbnail(file: File): Promise<Blob> {
     useWebWorker: true,
   });
 }
+
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}

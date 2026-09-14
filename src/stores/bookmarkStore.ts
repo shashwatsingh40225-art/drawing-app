@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseDemoMode } from '../lib/supabase';
 import { Bookmark, BookmarkColor } from '../types/book';
+import { useAuthStore } from './authStore';
 
 const LOCAL_STORAGE_KEY = 'kin_bookmarks_cache';
 
@@ -37,6 +38,13 @@ function saveLocalBookmarks(bookmarks: Bookmark[]) {
   }
 }
 
+function isDemoArtist(): boolean {
+  if (isSupabaseDemoMode) return true;
+  const user = useAuthStore.getState().user;
+  if (!user || user.id.startsWith('demo-')) return true;
+  return false;
+}
+
 export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   bookmarks: loadLocalBookmarks(),
   loading: false,
@@ -44,7 +52,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   fetchBookmarks: async (bookId: string) => {
     set({ loading: true });
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       set({ loading: false });
       return;
     }
@@ -93,10 +101,10 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
 
     const displayLabel = label.trim() ? label.trim() : `Page ${pageNumber}`;
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       const newBm: Bookmark = {
         id: newId,
-        user_id: 'demo-artist-01',
+        user_id: useAuthStore.getState().user?.id || 'demo-artist-01',
         book_id: bookId,
         page_number: pageNumber,
         label: displayLabel,
@@ -111,7 +119,21 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
+      if (!user) {
+        const newBm: Bookmark = {
+          id: newId,
+          user_id: 'demo-artist-01',
+          book_id: bookId,
+          page_number: pageNumber,
+          label: displayLabel,
+          color: color as BookmarkColor,
+          created_at: now,
+        };
+        const all = [...get().bookmarks, newBm];
+        set({ bookmarks: all });
+        saveLocalBookmarks(all);
+        return newBm;
+      }
 
       const { data, error } = await supabase
         .from('bookmarks')
@@ -126,8 +148,20 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         .single();
 
       if (error) {
-        console.warn('Insert bookmark error:', error.message);
-        return null;
+        console.warn('Insert bookmark error, saving locally:', error.message);
+        const newBm: Bookmark = {
+          id: newId,
+          user_id: user.id,
+          book_id: bookId,
+          page_number: pageNumber,
+          label: displayLabel,
+          color: color as BookmarkColor,
+          created_at: now,
+        };
+        const all = [...get().bookmarks, newBm];
+        set({ bookmarks: all });
+        saveLocalBookmarks(all);
+        return newBm;
       }
 
       const all = [...get().bookmarks, data];
@@ -135,8 +169,20 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       saveLocalBookmarks(all);
       return data;
     } catch (err) {
-      console.warn('Bookmark add error:', err);
-      return null;
+      console.warn('Add bookmark error, saving locally:', err);
+      const newBm: Bookmark = {
+        id: newId,
+        user_id: 'demo-artist-01',
+        book_id: bookId,
+        page_number: pageNumber,
+        label: displayLabel,
+        color: color as BookmarkColor,
+        created_at: now,
+      };
+      const all = [...get().bookmarks, newBm];
+      set({ bookmarks: all });
+      saveLocalBookmarks(all);
+      return newBm;
     }
   },
 

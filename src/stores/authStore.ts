@@ -22,24 +22,33 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   initialize: async () => {
     try {
-      if (isSupabaseDemoMode) {
-        // In demo mode, check if there is a cached demo user
-        const storedDemoUser = localStorage.getItem('kin_demo_user');
-        if (storedDemoUser) {
-          const parsed = JSON.parse(storedDemoUser);
-          set({ user: parsed, session: { user: parsed } as unknown as Session, loading: false });
+      if (!isSupabaseDemoMode) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          localStorage.removeItem('kin_demo_user');
+          set({ session, user: session.user, loading: false });
+
+          supabase.auth.onAuthStateChange((_event, newSession) => {
+            if (newSession?.user) {
+              localStorage.removeItem('kin_demo_user');
+              set({ session: newSession, user: newSession.user });
+            } else if (!localStorage.getItem('kin_demo_user')) {
+              set({ session: null, user: null });
+            }
+          });
           return;
         }
-        set({ session: null, user: null, loading: false });
+      }
+
+      // Check if there is a cached demo studio user
+      const storedDemoUser = localStorage.getItem('kin_demo_user');
+      if (storedDemoUser) {
+        const parsed = JSON.parse(storedDemoUser);
+        set({ user: parsed, session: { user: parsed } as unknown as Session, loading: false });
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      set({ session, user: session?.user ?? null, loading: false });
-
-      supabase.auth.onAuthStateChange((_event, session) => {
-        set({ session, user: session?.user ?? null });
-      });
+      set({ session: null, user: null, loading: false });
     } catch (err) {
       console.warn('Supabase auth initialization fallback:', err);
       set({ session: null, user: null, loading: false });
@@ -48,7 +57,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signUp: async (email, password) => {
     set({ loading: true, error: null });
-    if (isSupabaseDemoMode) {
+    if (isSupabaseDemoMode || email.endsWith('@kin-studio.local')) {
       const demoUser = {
         id: 'demo-artist-' + Date.now(),
         email,
@@ -63,9 +72,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      set({ loading: false, error: error?.message ?? null });
-      return { error: error?.message ?? null };
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        set({ loading: false, error: error.message });
+        return { error: error.message };
+      }
+      if (data?.user) {
+        set({ user: data.user, session: data.session, loading: false });
+      } else {
+        set({ loading: false });
+      }
+      return { error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign up failed';
       set({ loading: false, error: msg });
@@ -75,7 +92,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signIn: async (email, password) => {
     set({ loading: true, error: null });
-    if (isSupabaseDemoMode) {
+    // Support instant demo login for the demo studio account regardless of supabase mode
+    if (email === 'artist@kin-studio.local' || email.endsWith('@kin-studio.local') || isSupabaseDemoMode) {
       const demoUser = {
         id: 'demo-artist-01',
         email,
@@ -90,9 +108,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      set({ loading: false, error: error?.message ?? null });
-      return { error: error?.message ?? null };
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        set({ loading: false, error: error.message });
+        return { error: error.message };
+      }
+      localStorage.removeItem('kin_demo_user');
+      set({ user: data.user, session: data.session, loading: false });
+      return { error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign in failed';
       set({ loading: false, error: msg });
@@ -101,12 +124,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signOut: async () => {
-    if (isSupabaseDemoMode) {
-      localStorage.removeItem('kin_demo_user');
-      set({ user: null, session: null });
-      return;
+    localStorage.removeItem('kin_demo_user');
+    if (!isSupabaseDemoMode) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.warn('Sign out error:', err);
+      }
     }
-    await supabase.auth.signOut();
     set({ user: null, session: null });
   },
 

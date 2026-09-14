@@ -1,4 +1,4 @@
-import { createHashRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomeScreen } from './screens/HomeScreen';
@@ -15,7 +15,7 @@ import { ReaderScreen } from './screens/ReaderScreen';
 import { ArchiveScreen } from './screens/ArchiveScreen';
 import { ArtRoomScreen } from './screens/ArtRoomScreen';
 
-export const router = createHashRouter([
+export const router = createBrowserRouter([
   {
     path: '/login',
     element: (

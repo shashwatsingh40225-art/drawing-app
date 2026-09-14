@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   Maximize,
   StickyNote,
   Archive,
+  MoreHorizontal,
 } from 'lucide-react';
 
 interface ReaderToolbarProps {
@@ -56,10 +57,21 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
   onFitPage,
 }) => {
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -106,7 +118,7 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            maxWidth: isFocusMode ? '400px' : '280px',
+            maxWidth: isMobile ? '130px' : (isFocusMode ? '400px' : '280px'),
           }}
           title={bookTitle}
         >
@@ -182,209 +194,476 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
       </div>
 
       {/* Right: Zoom, Focus & Sidebars */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        {/* Zoom In/Out */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginRight: '4px' }}>
+      {isMobile ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Bookmark Toggle */}
           <button
             type="button"
-            onClick={() => onZoomChange(Math.max(0.5, zoomScale - 0.15))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--color-text-secondary)' }}
-            title="Zoom Out (-)"
-          >
-            <ZoomOut size={16} />
-          </button>
-          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text-muted)', minWidth: '40px', textAlign: 'center' }}>
-            {Math.round(zoomScale * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={() => onZoomChange(Math.min(2.5, zoomScale + 0.15))}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--color-text-secondary)' }}
-            title="Zoom In (+)"
-          >
-            <ZoomIn size={16} />
-          </button>
-        </div>
-
-        {/* Fit Width / Fit Page */}
-        {onFitWidth && (
-          <button
-            type="button"
-            onClick={onFitWidth}
+            onClick={onToggleBookmark}
             style={{
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              padding: '4px 8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: isBookmarked ? 'rgba(214, 51, 122, 0.1)' : 'transparent',
+              border: `1px solid ${isBookmarked ? 'var(--color-accent)' : 'var(--color-border)'}`,
+              borderRadius: 'var(--radius-pill)',
+              padding: '5px 10px',
+              cursor: 'pointer',
+              color: isBookmarked ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+            }}
+            title="Bookmark this page (B)"
+          >
+            <BookmarkIcon size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
+          </button>
+
+          {/* Focus Mode (Fullscreen) */}
+          <button
+            type="button"
+            onClick={onToggleFocusMode}
+            style={{
+              padding: '6px',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--color-border)',
-              background: 'none',
+              background: isFocusMode ? 'var(--color-primary)' : 'transparent',
+              color: isFocusMode ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
               cursor: 'pointer',
-              color: 'var(--color-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
             }}
-            title="Fit to Width"
+            title={isFocusMode ? 'Exit Fullscreen (Esc)' : 'Distraction-Free Mode (F)'}
           >
-            Fit Width
+            {isFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
-        )}
 
-        <div style={{ width: '1px', height: '18px', backgroundColor: 'var(--color-border)', margin: '0 4px' }} />
-
-        {/* Bookmark Toggle */}
-        <button
-          type="button"
-          onClick={onToggleBookmark}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: isBookmarked ? 'rgba(214, 51, 122, 0.1)' : 'transparent',
-            border: `1px solid ${isBookmarked ? 'var(--color-accent)' : 'var(--color-border)'}`,
-            borderRadius: 'var(--radius-pill)',
-            padding: '5px 12px',
-            cursor: 'pointer',
-            color: isBookmarked ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-          }}
-          title="Bookmark this page (B)"
-        >
-          <BookmarkIcon size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
-          <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
-        </button>
-
-        {/* Add Note Mode Toggle */}
-        {onToggleAddNote && (
+          {/* More Options / Overflow Toggle */}
           <button
             type="button"
-            onClick={onToggleAddNote}
+            onClick={() => setOverflowOpen(!overflowOpen)}
+            style={{
+              padding: '6px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--color-border)',
+              background: overflowOpen ? 'rgba(58, 33, 64, 0.08)' : 'transparent',
+              color: 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title="More Options"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+
+          {/* Mobile Overflow Popover */}
+          {overflowOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: '12px',
+                marginTop: '6px',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '12px',
+                boxShadow: 'var(--shadow-modal)',
+                zIndex: 100,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                minWidth: '220px',
+              }}
+            >
+              {/* Zoom controls */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid var(--color-border)' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Zoom</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => onZoomChange(Math.max(0.5, zoomScale - 0.15))}
+                    style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
+                    title="Zoom Out (-)"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text-muted)', minWidth: '38px', textAlign: 'center' }}>
+                    {Math.round(zoomScale * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onZoomChange(Math.min(2.5, zoomScale + 0.15))}
+                    style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '4px', cursor: 'pointer', color: 'var(--color-text-secondary)' }}
+                    title="Zoom In (+)"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Fit buttons */}
+              {(onFitWidth || onFitPage) && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {onFitWidth && (
+                    <button
+                      type="button"
+                      onClick={() => { onFitWidth(); setOverflowOpen(false); }}
+                      style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        padding: '6px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-border)',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
+                      Fit Width
+                    </button>
+                  )}
+                  {onFitPage && (
+                    <button
+                      type="button"
+                      onClick={() => { onFitPage(); setOverflowOpen(false); }}
+                      style={{
+                        flex: 1,
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        padding: '6px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-border)',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
+                      Fit Page
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Add Note Button */}
+              {onToggleAddNote && (
+                <button
+                  type="button"
+                  onClick={() => { onToggleAddNote(); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: isAddingNote ? 'var(--color-secondary)' : 'transparent',
+                    border: `1px solid ${isAddingNote ? 'var(--color-secondary)' : 'var(--color-border)'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '7px 10px',
+                    cursor: 'pointer',
+                    color: isAddingNote ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+                    fontSize: '0.82rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  <StickyNote size={15} />
+                  <span>{isAddingNote ? 'Placing Note...' : 'Add Note to Page'}</span>
+                </button>
+              )}
+
+              {/* Sidebar views */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px', borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)', marginBottom: '2px' }}>
+                  Panels
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { onToggleSidebar('thumbnails'); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: activeSidebar === 'thumbnails' ? 'rgba(58, 33, 64, 0.08)' : 'transparent',
+                    color: activeSidebar === 'thumbnails' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    textAlign: 'left',
+                  }}
+                >
+                  <LayoutGrid size={15} />
+                  <span>Page Thumbnails</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onToggleSidebar('bookmarks'); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: activeSidebar === 'bookmarks' ? 'rgba(58, 33, 64, 0.08)' : 'transparent',
+                    color: activeSidebar === 'bookmarks' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    textAlign: 'left',
+                  }}
+                >
+                  <BookmarkCheck size={15} />
+                  <span>Bookmarks</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onToggleSidebar('notes'); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: activeSidebar === 'notes' ? 'rgba(58, 33, 64, 0.08)' : 'transparent',
+                    color: activeSidebar === 'notes' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    textAlign: 'left',
+                  }}
+                >
+                  <StickyNote size={15} />
+                  <span>Notes &amp; Pins</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onToggleSidebar('archive'); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: activeSidebar === 'archive' ? 'rgba(58, 33, 64, 0.08)' : 'transparent',
+                    color: activeSidebar === 'archive' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    textAlign: 'left',
+                  }}
+                >
+                  <Archive size={15} />
+                  <span>Kin Archive</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Zoom In/Out */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginRight: '4px' }}>
+            <button
+              type="button"
+              onClick={() => onZoomChange(Math.max(0.5, zoomScale - 0.15))}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--color-text-secondary)' }}
+              title="Zoom Out (-)"
+            >
+              <ZoomOut size={16} />
+            </button>
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text-muted)', minWidth: '40px', textAlign: 'center' }}>
+              {Math.round(zoomScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => onZoomChange(Math.min(2.5, zoomScale + 0.15))}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', color: 'var(--color-text-secondary)' }}
+              title="Zoom In (+)"
+            >
+              <ZoomIn size={16} />
+            </button>
+          </div>
+
+          {/* Fit Width / Fit Page */}
+          {onFitWidth && (
+            <button
+              type="button"
+              onClick={onFitWidth}
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--color-border)',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+              }}
+              title="Fit to Width"
+            >
+              Fit Width
+            </button>
+          )}
+
+          <div style={{ width: '1px', height: '18px', backgroundColor: 'var(--color-border)', margin: '0 4px' }} />
+
+          {/* Bookmark Toggle */}
+          <button
+            type="button"
+            onClick={onToggleBookmark}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              background: isAddingNote ? 'var(--color-secondary)' : 'transparent',
-              border: `1px solid ${isAddingNote ? 'var(--color-secondary)' : 'var(--color-border)'}`,
+              background: isBookmarked ? 'rgba(214, 51, 122, 0.1)' : 'transparent',
+              border: `1px solid ${isBookmarked ? 'var(--color-accent)' : 'var(--color-border)'}`,
               borderRadius: 'var(--radius-pill)',
               padding: '5px 12px',
               cursor: 'pointer',
-              color: isAddingNote ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+              color: isBookmarked ? 'var(--color-accent)' : 'var(--color-text-secondary)',
               fontSize: '0.8rem',
               fontWeight: 600,
             }}
-            title="Add a note or pin on this page"
+            title="Bookmark this page (B)"
+          >
+            <BookmarkIcon size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
+            <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+          </button>
+
+          {/* Add Note Mode Toggle */}
+          {onToggleAddNote && (
+            <button
+              type="button"
+              onClick={onToggleAddNote}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: isAddingNote ? 'var(--color-secondary)' : 'transparent',
+                border: `1px solid ${isAddingNote ? 'var(--color-secondary)' : 'var(--color-border)'}`,
+                borderRadius: 'var(--radius-pill)',
+                padding: '5px 12px',
+                cursor: 'pointer',
+                color: isAddingNote ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+              }}
+              title="Add a note or pin on this page"
+            >
+              <StickyNote size={14} />
+              <span>{isAddingNote ? 'Placing Note...' : 'Add Note'}</span>
+            </button>
+          )}
+
+          {/* Sidebar Toggles */}
+          <button
+            type="button"
+            onClick={() => onToggleSidebar('thumbnails')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--color-border)',
+              background: activeSidebar === 'thumbnails' ? 'var(--color-primary)' : 'transparent',
+              color: activeSidebar === 'thumbnails' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+            }}
+            title="Page Thumbnails"
+          >
+            <LayoutGrid size={14} />
+            <span>Pages</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onToggleSidebar('bookmarks')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--color-border)',
+              background: activeSidebar === 'bookmarks' ? 'var(--color-primary)' : 'transparent',
+              color: activeSidebar === 'bookmarks' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+            }}
+            title="Saved Bookmarks"
+          >
+            <BookmarkCheck size={14} />
+            <span>Bookmarks</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onToggleSidebar('notes')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--color-border)',
+              background: activeSidebar === 'notes' ? 'var(--color-primary)' : 'transparent',
+              color: activeSidebar === 'notes' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+            }}
+            title="Notes and Annotations"
           >
             <StickyNote size={14} />
-            <span>{isAddingNote ? 'Placing Note...' : 'Add Note'}</span>
+            <span>Notes</span>
           </button>
-        )}
 
-        {/* Sidebar Toggles */}
-        <button
-          type="button"
-          onClick={() => onToggleSidebar('thumbnails')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '5px 10px',
-            borderRadius: 'var(--radius-pill)',
-            border: '1px solid var(--color-border)',
-            background: activeSidebar === 'thumbnails' ? 'var(--color-primary)' : 'transparent',
-            color: activeSidebar === 'thumbnails' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            fontWeight: 500,
-          }}
-          title="Page Thumbnails"
-        >
-          <LayoutGrid size={14} />
-          <span>Pages</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => onToggleSidebar('archive')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 10px',
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--color-border)',
+              background: activeSidebar === 'archive' ? 'var(--color-primary)' : 'transparent',
+              color: activeSidebar === 'archive' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 500,
+            }}
+            title="Browse & Pin Kin Archive Works"
+          >
+            <Archive size={14} />
+            <span>Archive</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => onToggleSidebar('bookmarks')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '5px 10px',
-            borderRadius: 'var(--radius-pill)',
-            border: '1px solid var(--color-border)',
-            background: activeSidebar === 'bookmarks' ? 'var(--color-primary)' : 'transparent',
-            color: activeSidebar === 'bookmarks' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            fontWeight: 500,
-          }}
-          title="Saved Bookmarks"
-        >
-          <BookmarkCheck size={14} />
-          <span>Bookmarks</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onToggleSidebar('notes')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '5px 10px',
-            borderRadius: 'var(--radius-pill)',
-            border: '1px solid var(--color-border)',
-            background: activeSidebar === 'notes' ? 'var(--color-primary)' : 'transparent',
-            color: activeSidebar === 'notes' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            fontWeight: 500,
-          }}
-          title="Notes and Annotations"
-        >
-          <StickyNote size={14} />
-          <span>Notes</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onToggleSidebar('archive')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '5px 10px',
-            borderRadius: 'var(--radius-pill)',
-            border: '1px solid var(--color-border)',
-            background: activeSidebar === 'archive' ? 'var(--color-primary)' : 'transparent',
-            color: activeSidebar === 'archive' ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            fontWeight: 500,
-          }}
-          title="Browse & Pin Kin Archive Works"
-        >
-          <Archive size={14} />
-          <span>Archive</span>
-        </button>
-
-        {/* Focus Mode (Fullscreen) */}
-        <button
-          type="button"
-          onClick={onToggleFocusMode}
-          style={{
-            padding: '6px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid var(--color-border)',
-            background: isFocusMode ? 'var(--color-primary)' : 'transparent',
-            color: isFocusMode ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-          title={isFocusMode ? 'Exit Fullscreen (Esc)' : 'Distraction-Free Mode (F)'}
-        >
-          {isFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
-      </div>
+          {/* Focus Mode (Fullscreen) */}
+          <button
+            type="button"
+            onClick={onToggleFocusMode}
+            style={{
+              padding: '6px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--color-border)',
+              background: isFocusMode ? 'var(--color-primary)' : 'transparent',
+              color: isFocusMode ? 'var(--color-text-on-dark)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            title={isFocusMode ? 'Exit Fullscreen (Esc)' : 'Distraction-Free Mode (F)'}
+          >
+            {isFocusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

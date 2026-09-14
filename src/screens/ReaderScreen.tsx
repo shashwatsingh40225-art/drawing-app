@@ -9,6 +9,8 @@ import { getBookSignedUrl } from '../services/bookService';
 import { ReaderToolbar } from '../components/reader/ReaderToolbar';
 import { ReaderSidebar } from '../components/reader/ReaderSidebar';
 import { ReaderViewport } from '../components/reader/ReaderViewport';
+import { ReadingProgressBar } from '../components/reader/ReadingProgressBar';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ConcentricPortal } from '../components/ConcentricPortal';
 import { KIN_ARCHIVE_BY_ID } from '../data/kinArchive';
 
@@ -263,6 +265,11 @@ export const ReaderScreen: React.FC = () => {
     );
   }
 
+  const swipeHandlers = useSwipeGesture({
+    onSwipeLeft: () => handlePageChange(currentPage + 1),
+    onSwipeRight: () => handlePageChange(currentPage - 1),
+  });
+
   const bookmarked = id ? isPageBookmarked(id, currentPage) : false;
 
   return (
@@ -278,6 +285,8 @@ export const ReaderScreen: React.FC = () => {
         overflow: 'hidden',
       }}
     >
+      <ReadingProgressBar currentPage={currentPage} totalPages={totalPages} />
+
       {/* Top Toolbar */}
       <ReaderToolbar
         bookTitle={book?.title || 'PDF Document'}
@@ -302,7 +311,7 @@ export const ReaderScreen: React.FC = () => {
       />
 
       {/* Reader Main Layout */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div {...swipeHandlers} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {loadingUrl ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
             <ConcentricPortal size={70} />

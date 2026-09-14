@@ -33,6 +33,15 @@ function saveLocalAnnotations(items: PageAnnotation[]) {
   }
 }
 
+import { useAuthStore } from './authStore';
+
+function isDemoArtist(): boolean {
+  if (isSupabaseDemoMode) return true;
+  const user = useAuthStore.getState().user;
+  if (!user || user.id.startsWith('demo-')) return true;
+  return false;
+}
+
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   annotations: loadLocalAnnotations(),
   loading: false,
@@ -40,7 +49,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   fetchAnnotations: async (bookId: string) => {
     set({ loading: true });
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       set({ loading: false });
       return;
     }
@@ -58,8 +67,9 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
         return;
       }
 
-      const otherItems = get().annotations.filter((a) => a.book_id !== bookId);
-      const merged = [...otherItems, ...(data ?? [])];
+      // Merge fetched annotations with others in state
+      const currentOthers = get().annotations.filter((a) => a.book_id !== bookId);
+      const merged = [...currentOthers, ...(data ?? [])];
       set({ annotations: merged, loading: false });
       saveLocalAnnotations(merged);
     } catch {
@@ -80,7 +90,66 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
         ? crypto.randomUUID()
         : 'ann-' + Date.now();
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
+      const newAnn: PageAnnotation = {
+        ...annotationData,
+        id: newId,
+        user_id: useAuthStore.getState().user?.id || 'demo-artist-01',
+        created_at: now,
+        updated_at: now,
+      };
+      const all = [...get().annotations, newAnn];
+      set({ annotations: all });
+      saveLocalAnnotations(all);
+      return newAnn;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        const newAnn: PageAnnotation = {
+          ...annotationData,
+          id: newId,
+          user_id: 'demo-artist-01',
+          created_at: now,
+          updated_at: now,
+        };
+        const all = [...get().annotations, newAnn];
+        set({ annotations: all });
+        saveLocalAnnotations(all);
+        return newAnn;
+      }
+
+      const { data, error } = await supabase
+        .from('annotations')
+        .insert({
+          ...annotationData,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.warn('Insert annotation error, saving locally:', error.message);
+        const newAnn: PageAnnotation = {
+          ...annotationData,
+          id: newId,
+          user_id: user.id,
+          created_at: now,
+          updated_at: now,
+        };
+        const all = [...get().annotations, newAnn];
+        set({ annotations: all });
+        saveLocalAnnotations(all);
+        return newAnn;
+      }
+
+      const all = [...get().annotations, data];
+      set({ annotations: all });
+      saveLocalAnnotations(all);
+      return data;
+    } catch (err) {
+      console.warn('Add annotation error, saving locally:', err);
       const newAnn: PageAnnotation = {
         ...annotationData,
         id: newId,
@@ -93,33 +162,6 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       saveLocalAnnotations(all);
       return newAnn;
     }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from('annotations')
-        .insert({
-          ...annotationData,
-          user_id: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.warn('Insert annotation error:', error.message);
-        return null;
-      }
-
-      const all = [...get().annotations, data];
-      set({ annotations: all });
-      saveLocalAnnotations(all);
-      return data;
-    } catch (err) {
-      console.warn('Add annotation error:', err);
-      return null;
-    }
   },
 
   updateAnnotation: async (id: string, updates: Partial<PageAnnotation>) => {
@@ -130,7 +172,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({ annotations: next });
     saveLocalAnnotations(next);
 
-    if (isSupabaseDemoMode) return;
+    if (isDemoArtist()) return;
 
     try {
       await supabase
@@ -147,7 +189,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({ annotations: next });
     saveLocalAnnotations(next);
 
-    if (isSupabaseDemoMode) return;
+    if (isDemoArtist()) return;
 
     try {
       await supabase.from('annotations').delete().eq('id', id);

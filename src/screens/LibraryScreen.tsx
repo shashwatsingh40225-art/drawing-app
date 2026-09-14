@@ -9,6 +9,7 @@ import { BookUploadZone } from '../components/library/BookUploadZone';
 import { useBookStore } from '../stores/bookStore';
 import { useToastStore } from '../stores/toastStore';
 import { Book } from '../types/book';
+import { PageTransition } from '../components/motion/PageTransition';
 
 export const LibraryScreen: React.FC = () => {
   const { books, loading, fetchBooks, softDeleteBook } = useBookStore();
@@ -52,7 +53,8 @@ export const LibraryScreen: React.FC = () => {
   };
 
   return (
-    <div className="fade-in" style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+    <PageTransition>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
       <PageHeader
         icon={<Library size={16} />}
         eyebrowLabel="My Library — Private Art Companion"
@@ -310,5 +312,6 @@ export const LibraryScreen: React.FC = () => {
         onCancel={() => setBookToDelete(null)}
       />
     </div>
-  );
+  </PageTransition>
+);
 };

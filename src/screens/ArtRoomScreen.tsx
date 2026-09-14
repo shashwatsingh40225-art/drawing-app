@@ -6,6 +6,7 @@ import { ArtRoomCanvas } from '../components/artroom/ArtRoomCanvas';
 import { AddItemModal } from '../components/artroom/AddItemModal';
 import { useArtRoomStore } from '../stores/artRoomStore';
 import { useToastStore } from '../stores/toastStore';
+import { PageTransition } from '../components/motion/PageTransition';
 
 export const ArtRoomScreen: React.FC = () => {
   const {
@@ -43,7 +44,8 @@ export const ArtRoomScreen: React.FC = () => {
   };
 
   return (
-    <div className="fade-in" style={{ maxWidth: '1360px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+    <PageTransition>
+      <div style={{ maxWidth: '1360px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
       <PageHeader
         icon={<LayoutGrid size={16} />}
         eyebrowLabel="Studio Space"
@@ -126,5 +128,6 @@ export const ArtRoomScreen: React.FC = () => {
         onCancel={() => setShowClearConfirm(false)}
       />
     </div>
-  );
+  </PageTransition>
+);
 };

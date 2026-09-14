@@ -127,6 +127,15 @@ function saveLocalItems(items: ArtRoomItem[]) {
   }
 }
 
+import { useAuthStore } from './authStore';
+
+function isDemoArtist(): boolean {
+  if (isSupabaseDemoMode) return true;
+  const user = useAuthStore.getState().user;
+  if (!user || user.id.startsWith('demo-')) return true;
+  return false;
+}
+
 export const useArtRoomStore = create<ArtRoomState>((set, get) => ({
   board: null,
   items: [],
@@ -140,7 +149,7 @@ export const useArtRoomStore = create<ArtRoomState>((set, get) => ({
   fetchBoardAndItems: async () => {
     set({ loading: true });
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       set({
         board: loadLocalBoard(),
         items: loadLocalItems(),
@@ -152,7 +161,11 @@ export const useArtRoomStore = create<ArtRoomState>((set, get) => ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        set({ loading: false });
+        set({
+          board: loadLocalBoard(),
+          items: loadLocalItems(),
+          loading: false,
+        });
         return;
       }
 
@@ -208,11 +221,11 @@ export const useArtRoomStore = create<ArtRoomState>((set, get) => ({
 
     const maxZ = get().items.reduce((max, i) => Math.max(max, i.z_index), 0);
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       const newItem: ArtRoomItem = {
         ...itemData,
         id: newId,
-        user_id: 'demo-artist-01',
+        user_id: useAuthStore.getState().user?.id || 'demo-artist-01',
         board_id: get().board?.id || 'board-demo-01',
         z_index: maxZ + 1,
         created_at: now,

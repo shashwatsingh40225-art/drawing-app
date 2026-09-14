@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { EyeMark } from './EyeMark';
 import { useAuthStore } from '../stores/authStore';
 import { 
@@ -13,6 +13,8 @@ import {
   X,
   Archive,
   LayoutDashboard,
+  Home,
+  LayoutGrid,
 } from 'lucide-react';
 
 export type ScreenType = string;
@@ -66,16 +68,17 @@ export const Navigation: React.FC<NavigationProps> = () => {
   };
 
   return (
-    <header
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-border)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        boxShadow: '0 1px 6px rgba(36, 19, 41, 0.04)',
-      }}
-    >
+    <>
+      <header
+        style={{
+          backgroundColor: 'var(--color-surface)',
+          borderBottom: '1px solid var(--color-border)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+          boxShadow: '0 1px 6px rgba(36, 19, 41, 0.04)',
+        }}
+      >
       <div
         style={{
           maxWidth: '1280px',
@@ -434,5 +437,46 @@ export const Navigation: React.FC<NavigationProps> = () => {
         </div>
       )}
     </header>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="mobile-bottom-nav" aria-label="Mobile Navigation">
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? 'active' : ''}`}
+        >
+          <Home size={20} />
+          <span>Home</span>
+        </NavLink>
+        <NavLink
+          to="/my-art"
+          className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? 'active' : ''}`}
+        >
+          <Palette size={20} />
+          <span>My Art</span>
+        </NavLink>
+        <NavLink
+          to="/library"
+          className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? 'active' : ''}`}
+        >
+          <BookOpen size={20} />
+          <span>Library</span>
+        </NavLink>
+        <NavLink
+          to="/archive"
+          className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? 'active' : ''}`}
+        >
+          <Archive size={20} />
+          <span>Archive</span>
+        </NavLink>
+        <NavLink
+          to="/art-room"
+          className={({ isActive }) => `mobile-bottom-nav-item ${isActive ? 'active' : ''}`}
+        >
+          <LayoutGrid size={20} />
+          <span>Art Room</span>
+        </NavLink>
+      </nav>
+    </>
   );
 };

@@ -21,6 +21,14 @@ export const ArtworkMat: React.FC<ArtworkMatProps> = ({
   style = {},
   children,
 }) => {
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    setHasError(false);
+  }, [imageUrl]);
+
+  const sourceUrl = (!hasError && imageUrl) ? imageUrl : '/artist-reference/art-01.jpeg';
+
   return (
     <div
       className={`artwork-mat ${className}`}
@@ -39,23 +47,22 @@ export const ArtworkMat: React.FC<ArtworkMatProps> = ({
         ...style,
       }}
     >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={alt}
-          className="artwork-img-blend"
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            width: 'auto',
-            height: 'auto',
-            objectFit: 'contain',
-            borderRadius: 'var(--radius-sm)',
-            display: 'block',
-          }}
-          loading="lazy"
-        />
-      ) : null}
+      <img
+        src={sourceUrl}
+        alt={alt}
+        className="artwork-img-blend"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '100%',
+          width: 'auto',
+          height: 'auto',
+          objectFit: 'contain',
+          borderRadius: 'var(--radius-sm)',
+          display: 'block',
+        }}
+        loading="lazy"
+        onError={() => setHasError(true)}
+      />
       {children}
     </div>
   );

@@ -68,6 +68,15 @@ function saveLocalCollections(cols: Collection[]) {
   }
 }
 
+import { useAuthStore } from './authStore';
+
+function isDemoArtist(): boolean {
+  if (isSupabaseDemoMode) return true;
+  const user = useAuthStore.getState().user;
+  if (!user || user.id.startsWith('demo-')) return true;
+  return false;
+}
+
 export const useCollectionStore = create<CollectionState>((set, get) => ({
   collections: [],
   loading: false,
@@ -76,7 +85,7 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
   fetchCollections: async () => {
     set({ loading: true, error: null });
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       const items = loadLocalCollections().filter((c) => !c.deleted_at);
       set({ collections: items, loading: false });
       return;
@@ -105,10 +114,10 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     const now = new Date().toISOString();
     const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'col-' + Date.now();
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       const newCol: Collection = {
         id: newId,
-        user_id: 'demo-artist-01',
+        user_id: useAuthStore.getState().user?.id || 'demo-artist-01',
         name,
         description,
         sort_order: get().collections.length + 1,
@@ -125,8 +134,20 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        set({ error: 'Not authenticated' });
-        return null;
+        const newCol: Collection = {
+          id: newId,
+          user_id: 'demo-artist-01',
+          name,
+          description,
+          sort_order: get().collections.length + 1,
+          created_at: now,
+          updated_at: now,
+          deleted_at: null,
+        };
+        const all = [...loadLocalCollections(), newCol];
+        saveLocalCollections(all);
+        set({ collections: [...get().collections, newCol] });
+        return newCol;
       }
 
       const { data, error } = await supabase
@@ -136,22 +157,47 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         .single();
 
       if (error) {
-        set({ error: error.message });
-        return null;
+        console.warn('Supabase add collection error, saving locally:', error.message);
+        const newCol: Collection = {
+          id: newId,
+          user_id: user.id,
+          name,
+          description,
+          sort_order: get().collections.length + 1,
+          created_at: now,
+          updated_at: now,
+          deleted_at: null,
+        };
+        const all = [...loadLocalCollections(), newCol];
+        saveLocalCollections(all);
+        set({ collections: [...get().collections, newCol] });
+        return newCol;
       }
       set({ collections: [...get().collections, data] });
       return data;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to add collection';
-      set({ error: msg });
-      return null;
+      console.warn('Collection add exception, saving locally:', err);
+      const newCol: Collection = {
+        id: newId,
+        user_id: 'demo-artist-01',
+        name,
+        description,
+        sort_order: get().collections.length + 1,
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+      };
+      const all = [...loadLocalCollections(), newCol];
+      saveLocalCollections(all);
+      set({ collections: [...get().collections, newCol] });
+      return newCol;
     }
   },
 
   updateCollection: async (id, updates) => {
     const now = new Date().toISOString();
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       const all = loadLocalCollections().map((c) =>
         c.id === id ? { ...c, ...updates, updated_at: now } : c
       );
@@ -171,8 +217,11 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         .eq('id', id);
 
       if (error) {
-        set({ error: error.message });
-        return;
+        console.warn('Update collection error, saving locally:', error.message);
+        const all = loadLocalCollections().map((c) =>
+          c.id === id ? { ...c, ...updates, updated_at: now } : c
+        );
+        saveLocalCollections(all);
       }
       set({
         collections: get().collections.map((c) =>
@@ -181,13 +230,22 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
       });
     } catch (err) {
       console.warn('Update collection error:', err);
+      const all = loadLocalCollections().map((c) =>
+        c.id === id ? { ...c, ...updates, updated_at: now } : c
+      );
+      saveLocalCollections(all);
+      set({
+        collections: get().collections.map((c) =>
+          c.id === id ? { ...c, ...updates, updated_at: now } : c
+        ),
+      });
     }
   },
 
   deleteCollection: async (id) => {
     const now = new Date().toISOString();
 
-    if (isSupabaseDemoMode) {
+    if (isDemoArtist()) {
       const all = loadLocalCollections().map((c) =>
         c.id === id ? { ...c, deleted_at: now } : c
       );
@@ -203,12 +261,20 @@ export const useCollectionStore = create<CollectionState>((set, get) => ({
         .eq('id', id);
 
       if (error) {
-        set({ error: error.message });
-        return;
+        console.warn('Delete collection error, updating locally:', error.message);
       }
+      const all = loadLocalCollections().map((c) =>
+        c.id === id ? { ...c, deleted_at: now } : c
+      );
+      saveLocalCollections(all);
       set({ collections: get().collections.filter((c) => c.id !== id) });
     } catch (err) {
       console.warn('Delete collection error:', err);
+      const all = loadLocalCollections().map((c) =>
+        c.id === id ? { ...c, deleted_at: now } : c
+      );
+      saveLocalCollections(all);
+      set({ collections: get().collections.filter((c) => c.id !== id) });
     }
   },
 }));
