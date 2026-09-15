@@ -8,6 +8,65 @@ import { useTapZones } from '../../hooks/useTapZones';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
+/**
+ * Print-formatted book PDFs bake in generous page margins (and often near-empty pages at a
+ * chapter's end). Fitting such a page to the container's width, as the default reading view does,
+ * leaves that same margin as dead space below the text once the page is shown full-screen in
+ * immersive mode — the "why is half the screen black" gap. This scans the rendered page canvas for
+ * its actual ink bounding box so immersive mode can zoom/center on just the content, "contain"-fit
+ * against the available frame so no real text is ever cropped. Returns fractions of page width/height.
+ */
+function detectContentBBox(canvas: HTMLCanvasElement): { fx0: number; fx1: number; fy0: number; fy1: number } | null {
+  try {
+    const { width, height } = canvas;
+    if (!width || !height) return null;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const { data } = ctx.getImageData(0, 0, width, height);
+    const at = (x: number, y: number) => (y * width + x) * 4;
+    const sample = (x: number, y: number): [number, number, number] => {
+      const i = at(x, y);
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    // Sample the four corners to learn the page's own background color (not necessarily pure white).
+    const corners = [sample(1, 1), sample(width - 2, 1), sample(1, height - 2), sample(width - 2, height - 2)];
+    const bg = [0, 1, 2].map((c) => corners.reduce((sum, px) => sum + px[c], 0) / corners.length);
+    const threshold = 20;
+    const stepX = Math.max(1, Math.floor(width / 350));
+    const stepY = Math.max(1, Math.floor(height / 500));
+    let minX = width, maxX = -1, minY = height, maxY = -1;
+    for (let y = 0; y < height; y += stepY) {
+      for (let x = 0; x < width; x += stepX) {
+        const i = at(x, y);
+        if (
+          Math.abs(data[i] - bg[0]) > threshold ||
+          Math.abs(data[i + 1] - bg[1]) > threshold ||
+          Math.abs(data[i + 2] - bg[2]) > threshold
+        ) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return null; // Blank page — nothing to zoom to, leave the normal fit alone.
+    const padX = Math.max(stepX * 2, (maxX - minX) * 0.02);
+    const padY = Math.max(stepY * 2, (maxY - minY) * 0.02);
+    const fx0 = Math.max(0, (minX - padX) / width);
+    const fx1 = Math.min(1, (maxX + padX) / width);
+    const fy0 = Math.max(0, (minY - padY) / height);
+    const fy1 = Math.min(1, (maxY + padY) / height);
+    // Page is already ~full-bleed (little to no margin) — nothing meaningful to crop.
+    if (fx1 - fx0 > 0.97 && fy1 - fy0 > 0.97) return null;
+    // Bbox too small to trust (e.g. a lone page-number or watermark, not the body text).
+    if (fx1 - fx0 < 0.08 || fy1 - fy0 < 0.08) return null;
+    return { fx0, fx1, fy0, fy1 };
+  } catch {
+    return null; // Any failure here just falls back to the normal, un-zoomed page — never blocks reading.
+  }
+}
+
 interface ReaderViewportProps {
   fileUrl: string | null;
   bookId: string;
@@ -55,6 +114,12 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const tapZoneHandlers = useTapZones({ onLeftTap, onCenterTap, onRightTap });
+
+  // Immersive-mode content framing: once a page finishes rendering, its ink bounding box (see
+  // detectContentBBox above) is used to compute a transform that zooms/centers on just the text,
+  // so full-screen reading doesn't show the page's baked-in print margins as dead black space.
+  const pageCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [contentFrame, setContentFrame] = useState<{ scale: number; tx: number; ty: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(() => {
@@ -115,6 +180,34 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
     };
   }, []);
 
+  // A stale zoom/center from the previous page must never flash onto the next one.
+  useEffect(() => {
+    setContentFrame(null);
+  }, [currentPage, isChromeHidden]);
+
+  const handlePageRenderSuccess = () => {
+    if (!isChromeHidden) return;
+    const canvas = pageCanvasRef.current;
+    if (!canvas) return;
+    const bbox = detectContentBBox(canvas);
+    if (!bbox) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || containerWidth <= 0 || containerHeight <= 0) return;
+    const bboxWidthPx = (bbox.fx1 - bbox.fx0) * rect.width;
+    const bboxHeightPx = (bbox.fy1 - bbox.fy0) * rect.height;
+    if (bboxWidthPx <= 0 || bboxHeightPx <= 0) return;
+    // "Contain" fit against the available frame: guarantees every bit of real text stays fully
+    // visible (never cropped), and never shrinks below the normal fit-width render (scale >= 1).
+    const scale = Math.min(1.8, Math.max(1, Math.min(containerWidth / bboxWidthPx, containerHeight / bboxHeightPx)));
+    const centerX = ((bbox.fx0 + bbox.fx1) / 2) * rect.width;
+    const centerY = ((bbox.fy0 + bbox.fy1) / 2) * rect.height;
+    setContentFrame({
+      scale,
+      tx: containerWidth / 2 - scale * centerX,
+      ty: containerHeight / 2 - scale * centerY,
+    });
+  };
+
   // Detect if the file is an image (demo placeholder) rather than an actual PDF
   const isImagePlaceholder =
     fileUrl &&
@@ -142,6 +235,9 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   const useHeightFit = fitToPage && !isImagePlaceholder;
   const fitPageHeight = Math.max(200, Math.round(containerHeight));
   const isOverflowing = !useHeightFit && effectivePageWidth > containerWidth;
+  // Content-frame (margin-crop) zoom only applies to the real immersive reading view — never to
+  // the manual fit-to-page zoom mode (which the reader chose deliberately) or the demo image path.
+  const useContentFrame = isChromeHidden && !useHeightFit && !isImagePlaceholder;
 
   const isCompactVertical = isChromeHidden || isLandscapePhone;
   const bottomPadding = isChromeHidden ? '0px' : isCompactVertical ? '16px' : '80px';
@@ -228,14 +324,29 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
       ) : fileUrl ? (
         /* Real PDF Document via react-pdf */
         <div
-          style={{
-            width: useHeightFit ? 'auto' : `${effectivePageWidth}px`,
-            maxWidth: useHeightFit || zoomScale <= 1 ? '100%' : 'none',
-            margin: isOverflowing ? '0 0 32px 0' : '0 auto 32px auto',
-            flexShrink: 0,
-            boxSizing: 'border-box',
-            filter: nightMode ? 'invert(0.92) hue-rotate(180deg)' : 'none',
-          }}
+          style={
+            useContentFrame
+              ? {
+                  // A fixed frame the size of the whole available viewport: the reading layer
+                  // inside it is positioned by the computed zoom/center transform, and anything
+                  // outside the frame (the cropped-out margin) is clipped rather than left blank.
+                  width: `${containerWidth}px`,
+                  height: `${containerHeight}px`,
+                  overflow: 'hidden',
+                  position: 'relative',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                  filter: nightMode ? 'invert(0.92) hue-rotate(180deg)' : 'none',
+                }
+              : {
+                  width: useHeightFit ? 'auto' : `${effectivePageWidth}px`,
+                  maxWidth: useHeightFit || zoomScale <= 1 ? '100%' : 'none',
+                  margin: isOverflowing ? '0 0 32px 0' : '0 auto 32px auto',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                  filter: nightMode ? 'invert(0.92) hue-rotate(180deg)' : 'none',
+                }
+          }
         >
           <Document
             key={reloadKey}
@@ -293,14 +404,29 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
             <div
               key={currentPage}
               className={`reader-reading-layer page-turn-transition${isChromeHidden ? ' reader-reading-layer--immersive' : ''}`}
-              style={{
-                width: '100%',
-                position: 'relative',
-              }}
+              style={
+                useContentFrame
+                  ? {
+                      width: `${effectivePageWidth}px`,
+                      position: 'relative',
+                      transform: contentFrame
+                        ? `translate(${contentFrame.tx}px, ${contentFrame.ty}px) scale(${contentFrame.scale})`
+                        : undefined,
+                      transformOrigin: '0 0',
+                    }
+                  : {
+                      width: '100%',
+                      position: 'relative',
+                    }
+              }
             >
               <Page
                 pageNumber={currentPage}
                 {...(useHeightFit ? { height: fitPageHeight } : { width: effectivePageWidth })}
+                canvasRef={(el) => {
+                  pageCanvasRef.current = el;
+                }}
+                onRenderSuccess={handlePageRenderSuccess}
                 renderTextLayer={true}
                 renderAnnotationLayer={true}
                 loading={

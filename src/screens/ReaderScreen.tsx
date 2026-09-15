@@ -87,6 +87,12 @@ export const ReaderScreen: React.FC = () => {
   // browser's own address bar / nav bar on platforms that support it (mainly Android Chrome —
   // iOS Safari doesn't expose this on iPhone, so there it's a no-op and the tap-to-hide chrome
   // above is still the main lever). Best-effort: never blocks reading if the browser refuses.
+  //
+  // This is requested once per reading session, not on every chrome show/hide tap: entering and
+  // leaving native Fullscreen re-triggers the browser's own "swipe down to exit" toast each time,
+  // which was firing on every single tap and made the reader unusable. So showing the chrome again
+  // does NOT exit fullscreen — the session stays fullscreen (independent of our own chrome overlay)
+  // until the reader screen itself is left, when the effect below releases it exactly once.
   const requestImmersive = useCallback(() => {
     const el = document.documentElement;
     if (document.fullscreenElement || !el.requestFullscreen) return;
@@ -99,11 +105,10 @@ export const ReaderScreen: React.FC = () => {
   const toggleChromeVisible = useCallback(() => {
     setIsChromeVisible((v) => {
       const next = !v;
-      if (next) exitImmersive();
-      else requestImmersive();
+      if (!next) requestImmersive();
       return next;
     });
-  }, [requestImmersive, exitImmersive]);
+  }, [requestImmersive]);
   // Leaving the reader screen must always release fullscreen, however it was left.
   useEffect(() => () => exitImmersive(), [exitImmersive]);
   const [showTapHint, setShowTapHint] = useState<boolean>(

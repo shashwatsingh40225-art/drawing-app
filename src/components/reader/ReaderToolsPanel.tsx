@@ -101,6 +101,14 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
     };
   }, []);
 
+  // A quiet, opt-in nudge toward installing (see ADR context: the browser's own Fullscreen exit
+  // toast already announces itself on every immersive tap, so this must never be another popup —
+  // it only shows inside a panel the reader chose to open). Skipped once actually installed.
+  const isStandalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true);
+  const showInstallTip = isMobile && !isStandalone;
+
   return (
     <>
       {isMobile && (
@@ -244,6 +252,24 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                 <Pin size={17} />
                 <span style={{ flex: 1 }}>Add Pin</span>
               </button>
+
+              {showInstallTip && (
+                <div
+                  style={{
+                    marginTop: '4px',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--color-surface-elevated)',
+                    border: '1px dashed var(--color-border)',
+                    fontSize: '0.78rem',
+                    lineHeight: 1.5,
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  Tip: add Kin to your home screen (your browser's menu → "Add to Home Screen") to
+                  read with no browser bar at all, like a real app.
+                </div>
+              )}
             </div>
           ) : view === 'thumbnails' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
