@@ -82,6 +82,30 @@ export const ReaderScreen: React.FC = () => {
   }, []);
   // Full-screen is the default reading mode on every device; tapping the page centre reveals chrome.
   const [isChromeVisible, setIsChromeVisible] = useState<boolean>(false);
+
+  // Immersive reading also asks the browser itself for the Fullscreen API, which hides the
+  // browser's own address bar / nav bar on platforms that support it (mainly Android Chrome —
+  // iOS Safari doesn't expose this on iPhone, so there it's a no-op and the tap-to-hide chrome
+  // above is still the main lever). Best-effort: never blocks reading if the browser refuses.
+  const requestImmersive = useCallback(() => {
+    const el = document.documentElement;
+    if (document.fullscreenElement || !el.requestFullscreen) return;
+    el.requestFullscreen().catch(() => {});
+  }, []);
+  const exitImmersive = useCallback(() => {
+    if (!document.fullscreenElement || !document.exitFullscreen) return;
+    document.exitFullscreen().catch(() => {});
+  }, []);
+  const toggleChromeVisible = useCallback(() => {
+    setIsChromeVisible((v) => {
+      const next = !v;
+      if (next) exitImmersive();
+      else requestImmersive();
+      return next;
+    });
+  }, [requestImmersive, exitImmersive]);
+  // Leaving the reader screen must always release fullscreen, however it was left.
+  useEffect(() => () => exitImmersive(), [exitImmersive]);
   const [showTapHint, setShowTapHint] = useState<boolean>(
     () => typeof window !== 'undefined' && !localStorage.getItem('kin_reader_hint_seen')
   );
@@ -559,7 +583,7 @@ export const ReaderScreen: React.FC = () => {
             }}
             onCenterTap={() => {
               if (showTapHint) dismissTapHint();
-              setIsChromeVisible((v) => !v);
+              toggleChromeVisible();
             }}
           />
         )}

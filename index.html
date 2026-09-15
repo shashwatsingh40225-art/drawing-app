@@ -3,10 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/brand/logo-mark-simple-48.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Kin — Kindred Artistic Expressions Discovery</title>
     <meta name="description" content="Upload your drawing and discover visually and artistically kindred artworks, sketches, and illustrations across online archives." />
-    
+
+    <!-- Installable as a standalone app (via "Add to Home Screen") so the reader can run
+         without the browser's own address bar / nav chrome, closer to a native reader app. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#F6F0E4" />
+    <link rel="apple-touch-icon" href="/brand/logo-mark.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Kin" />
+
     <!-- Google Fonts: Fraunces (editorial display serif) & Inter (humanist UI sans) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

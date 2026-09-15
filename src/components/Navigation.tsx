@@ -138,6 +138,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
           top: 0,
           zIndex: 50,
           boxShadow: '0 1px 6px rgba(36, 19, 41, 0.04)',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
       <div

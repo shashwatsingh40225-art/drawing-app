@@ -144,8 +144,9 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   const isOverflowing = !useHeightFit && effectivePageWidth > containerWidth;
 
   const isCompactVertical = isChromeHidden || isLandscapePhone;
-  const bottomPadding = isCompactVertical ? '16px' : '80px';
-  const topPadding = isLandscapePhone ? '12px' : '24px';
+  const bottomPadding = isChromeHidden ? '0px' : isCompactVertical ? '16px' : '80px';
+  const topPadding = isChromeHidden ? '0px' : isLandscapePhone ? '12px' : '24px';
+  const sidePadding = isChromeHidden ? '0px' : '16px';
 
   return (
     <div
@@ -163,7 +164,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
         flexDirection: 'column',
         alignItems: isOverflowing ? 'flex-start' : 'center',
         justifyContent: 'flex-start',
-        padding: `${topPadding} 16px ${bottomPadding} 16px`,
+        padding: `${topPadding} ${sidePadding} ${bottomPadding} ${sidePadding}`,
         backgroundColor: nightMode ? '#18181a' : 'var(--color-background)',
         WebkitOverflowScrolling: 'touch',
         boxSizing: 'border-box',
@@ -291,7 +292,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
           >
             <div
               key={currentPage}
-              className="reader-reading-layer page-turn-transition"
+              className={`reader-reading-layer page-turn-transition${isChromeHidden ? ' reader-reading-layer--immersive' : ''}`}
               style={{
                 width: '100%',
                 position: 'relative',

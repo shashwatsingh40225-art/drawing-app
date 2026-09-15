@@ -979,9 +979,18 @@ figcaption {
   user-select: text;
 }
 
+/* Immersive (chrome-hidden) reading: the page fills the viewport edge-to-edge like a
+   dedicated reader app, so the "floating card" frame (border/shadow/radius) is dropped. */
+.reader-reading-layer--immersive {
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+}
+
 /* Kin Layer: chrome block — tap-to-toggle shown/hidden as a single unit, fades in on mount */
 .reader-kin-chrome {
   animation: fadeIn 180ms var(--ease-standard) forwards;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Page turn transition in Kin layer (<100ms subtle fade, zero canvas transform) */
