@@ -48,12 +48,14 @@ export type RecapErrorCode =
   | 'insufficient_content'
   | 'unavailable';
 
-export const DEFAULT_GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
-export const DEFAULT_NVIDIA_MODELS = [
-  'meta/llama-3.3-70b-instruct',
-  'meta/llama-3.1-8b-instruct',
-  'mistralai/mixtral-8x22b-instruct-v0.1',
-];
+// gemini-flash-lite-latest has the best free-tier headroom (15 RPM / 1,000 RPD vs. 2.5-flash's
+// 10 RPM / ~250-500 RPD as of 2026-09) and was verified live against the current key/project;
+// gemini-2.5-flash is the quality fallback if the lite alias ever moves somewhere worse.
+export const DEFAULT_GEMINI_MODELS = ['gemini-flash-lite-latest', 'gemini-2.5-flash'];
+// meta/llama-3.3-70b-instruct, meta/llama-3.1-8b-instruct and mistralai/mixtral-8x22b-instruct-v0.1
+// all reached end-of-life on NVIDIA NIM (HTTP 410) as of 2026-09; replaced with models confirmed
+// live against the account's current NVIDIA_API_KEY.
+export const DEFAULT_NVIDIA_MODELS = ['nvidia/nemotron-3-super-120b-a12b', 'openai/gpt-oss-20b'];
 export const INSUFFICIENT_CONTENT = 'INSUFFICIENT_CONTENT';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
