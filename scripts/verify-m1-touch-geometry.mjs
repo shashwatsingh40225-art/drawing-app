@@ -634,31 +634,32 @@ it('Synthetic DOM propagation model: child stopPropagation blocks parent swipe d
   assert.strictEqual(parentSwipeTriggered, false, 'Parent swipe handler must NOT trigger when touching inside child panel');
 });
 
-it('Static code verification: ReaderSidebar.tsx attaches stopPropagation to container and backdrop', () => {
-  const sidebarCode = fs.readFileSync('src/components/reader/ReaderSidebar.tsx', 'utf-8');
+it('Static code verification: ReaderToolsPanel.tsx attaches stopPropagation to container and backdrop', () => {
+  const panelCode = fs.readFileSync('src/components/reader/ReaderToolsPanel.tsx', 'utf-8');
 
-  // Verify backdrop stopPropagation
-  assert.match(sidebarCode, /onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchStart');
-  assert.match(sidebarCode, /onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchMove');
-  assert.match(sidebarCode, /onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchEnd');
+  // Verify backdrop and container stopPropagation
+  assert.match(panelCode, /onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchStart');
+  assert.match(panelCode, /onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchMove');
+  assert.match(panelCode, /onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchEnd');
 
   // Count occurrences: both backdrop and drawer container must have stopPropagation (at least 2 of each)
-  const startMatches = (sidebarCode.match(/onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
-  const moveMatches = (sidebarCode.match(/onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
-  const endMatches = (sidebarCode.match(/onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
+  const startMatches = (panelCode.match(/onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
+  const moveMatches = (panelCode.match(/onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
+  const endMatches = (panelCode.match(/onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
 
-  assert.ok(startMatches >= 2, `ReaderSidebar has ${startMatches} onTouchStart stopPropagation handlers (expected >= 2)`);
-  assert.ok(moveMatches >= 2, `ReaderSidebar has ${moveMatches} onTouchMove stopPropagation handlers (expected >= 2)`);
-  assert.ok(endMatches >= 2, `ReaderSidebar has ${endMatches} onTouchEnd stopPropagation handlers (expected >= 2)`);
+  assert.ok(startMatches >= 2, `ReaderToolsPanel has ${startMatches} onTouchStart stopPropagation handlers (expected >= 2)`);
+  assert.ok(moveMatches >= 2, `ReaderToolsPanel has ${moveMatches} onTouchMove stopPropagation handlers (expected >= 2)`);
+  assert.ok(endMatches >= 2, `ReaderToolsPanel has ${endMatches} onTouchEnd stopPropagation handlers (expected >= 2)`);
 });
 
 it('Static code verification: MemoryBridgeCard.tsx attaches stopPropagation to container', () => {
   const cardCode = fs.readFileSync('src/components/reader/MemoryBridgeCard.tsx', 'utf-8');
 
   assert.match(cardCode, /className="memory-bridge-card"/, 'Card container exists');
-  assert.match(cardCode, /onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Card must stop TouchStart');
-  assert.match(cardCode, /onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Card must stop TouchMove');
-  assert.match(cardCode, /onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Card must stop TouchEnd');
+  assert.match(cardCode, /stopTouch/, 'Card uses stopTouch helper');
+  assert.match(cardCode, /onTouchStart=\{stopTouch\}/, 'Card must stop TouchStart');
+  assert.match(cardCode, /onTouchMove=\{stopTouch\}/, 'Card must stop TouchMove');
+  assert.match(cardCode, /onTouchEnd=\{stopTouch\}/, 'Card must stop TouchEnd');
 });
 
 // ============================================================================
@@ -755,17 +756,16 @@ it('ReaderScreen MemoryBridgeCard layout: right positioning prevents 38px collap
   assert.strictEqual(getCardRight(null, false), '16px');
 });
 
-it('ReaderToolbar popover styling: maxHeight and overflowY prevent overflow on short screens', () => {
-  const toolbarCode = fs.readFileSync('src/components/reader/ReaderToolbar.tsx', 'utf-8');
+it('ReaderToolsPanel styling: scrollable content prevents overflow on short screens', () => {
+  const panelCode = fs.readFileSync('src/components/reader/ReaderToolsPanel.tsx', 'utf-8');
 
-  assert.match(toolbarCode, /maxHeight:\s*['"]calc\(100vh\s*-\s*60px\)['"]/, 'Popover must have maxHeight calc(100vh - 60px)');
-  assert.match(toolbarCode, /overflowY:\s*['"]auto['"]/, 'Popover must have overflowY auto');
+  assert.match(panelCode, /overflowY:\s*['"]auto['"]/, 'ToolsPanel content must have overflowY auto');
 });
 
 it('MemoryBridgeCard styling: maxHeight and overflowY prevent action button clipping', () => {
   const cardCode = fs.readFileSync('src/components/reader/MemoryBridgeCard.tsx', 'utf-8');
 
-  assert.match(cardCode, /maxHeight:\s*['"]calc\(100vh\s*-\s*120px\)['"]/, 'MemoryBridgeCard must have maxHeight calc(100vh - 120px)');
+  assert.match(cardCode, /maxHeight:\s*isMobile\s*\?\s*['"]70vh['"]\s*:\s*['"]60vh['"]/, 'MemoryBridgeCard must have responsive maxHeight 70vh/60vh');
   assert.match(cardCode, /overflowY:\s*['"]auto['"]/, 'MemoryBridgeCard must have overflowY auto');
 });
 

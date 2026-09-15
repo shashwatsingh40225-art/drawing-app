@@ -6,8 +6,8 @@ interface MemoryBridgeCardProps {
   session: ReadingSession;
   isGenerating: boolean;
   isMobile: boolean;
-  /** Focus mode covers the app's bottom navigation, so the sheet can sit at the very bottom. */
-  isFocusMode?: boolean;
+  /** Chrome-hidden layout covers the app's bottom navigation, so the sheet can sit at the very bottom. */
+  isChromeHidden?: boolean;
   /** Highest page the reader has reached — the upper bound for a boundary correction. */
   maxEditablePage: number;
   /** Width of an inline sidebar on the right (desktop), so the card stays centred on the page. */
@@ -47,7 +47,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
   session,
   isGenerating,
   isMobile,
-  isFocusMode = false,
+  isChromeHidden = false,
   maxEditablePage,
   sidebarOffset = 0,
   onClose,
@@ -212,7 +212,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
 
   return (
     <div
-      className={`memory-bridge-layer${isFocusMode ? ' memory-bridge-layer--focus' : ''}`}
+      className={`memory-bridge-layer${isChromeHidden ? ' memory-bridge-layer--chrome-hidden' : ''}`}
       style={{
         position: 'absolute',
         left: 0,

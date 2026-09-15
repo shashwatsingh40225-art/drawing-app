@@ -12,10 +12,14 @@ import { isTransientRecapError, RecapErrorCode } from '../services/geminiRecapSe
 import { SessionDraft, maxEditablePage, pickBridgeSession } from '../services/readingSessionLogic';
 import { useReadingSessionTracker, SessionCloseReason } from '../hooks/useReadingSessionTracker';
 import { ReaderToolbar } from '../components/reader/ReaderToolbar';
-import { ReaderSidebar } from '../components/reader/ReaderSidebar';
+import { ReaderPageStrip } from '../components/reader/ReaderPageStrip';
+import { ReaderZoomStrip } from '../components/reader/ReaderZoomStrip';
+import { ReaderToolsPanel } from '../components/reader/ReaderToolsPanel';
+import { AddPinChooser } from '../components/reader/AddPinChooser';
 import { ReaderViewport } from '../components/reader/ReaderViewport';
 import { ReadingProgressBar } from '../components/reader/ReadingProgressBar';
 import { MemoryBridgeCard } from '../components/reader/MemoryBridgeCard';
+import { PendingPin } from '../components/reader/AnnotationOverlay';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ConcentricPortal } from '../components/ConcentricPortal';
 import { KIN_ARCHIVE_BY_ID } from '../data/kinArchive';
@@ -40,7 +44,6 @@ export const ReaderScreen: React.FC = () => {
     addAnnotation,
     updateAnnotation,
     deleteAnnotation,
-    annotations,
   } = useAnnotationStore();
   const { showToast } = useToastStore();
 
@@ -64,11 +67,10 @@ export const ReaderScreen: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
-  const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
-  const [isAddingNote, setIsAddingNote] = useState<boolean>(false);
-  const [activeSidebar, setActiveSidebar] = useState<'thumbnails' | 'bookmarks' | 'notes' | 'archive' | 'recap' | null>(null);
-  const [isQuietReading, setIsQuietReading] = useState<boolean>(false);
-  const [isChromeFaded, setIsChromeFaded] = useState<boolean>(false);
+  const [isChromeVisible, setIsChromeVisible] = useState<boolean>(true);
+  const [toolsOpen, setToolsOpen] = useState<boolean>(false);
+  const [pinChooserOpen, setPinChooserOpen] = useState<boolean>(false);
+  const [pendingPin, setPendingPin] = useState<PendingPin | null>(null);
   const [bridgeSessionId, setBridgeSessionId] = useState<string | null>(null);
 
   const checkIsMobile = () =>
@@ -90,7 +92,6 @@ export const ReaderScreen: React.FC = () => {
   const book = id ? getBookById(id) : undefined;
   const progress = id ? getProgress(id) : undefined;
   const bookmarks = id ? getBookmarks(id) : [];
-  const bookAnnotations = id ? annotations.filter((a) => a.book_id === id) : [];
   const pageAnnotations = id ? getAnnotationsForPage(id, currentPage) : [];
 
   const userNavigatedRef = useRef(false);
@@ -292,7 +293,7 @@ export const ReaderScreen: React.FC = () => {
   };
 
   // 8. Bookmark toggle
-  const handleToggleBookmark = async () => {
+  const handleToggleBookmark = useCallback(async () => {
     if (!id) return;
     const isBookmarked = isPageBookmarked(id, currentPage);
     if (isBookmarked) {
@@ -305,42 +306,41 @@ export const ReaderScreen: React.FC = () => {
       await addBookmark(id, currentPage, `Page ${currentPage} study note`);
       showToast({ type: 'success', message: `Page ${currentPage} bookmarked` });
     }
-  };
+  }, [id, currentPage, isPageBookmarked, bookmarks, removeBookmark, addBookmark, showToast]);
 
-  // 9. Add annotation at coordinates
-  const handleAddNoteAt = async (x_percent: number, y_percent: number) => {
-    if (!id) return;
-    setIsAddingNote(false);
-    const newAnn = await addAnnotation({
-      book_id: id,
-      page_number: currentPage,
-      type: 'note',
-      content: 'Observation on page ' + currentPage,
-      x_percent,
-      y_percent,
-    });
-    if (newAnn) {
-      showToast({ type: 'success', message: `Note placed on page ${currentPage}` });
-    }
-  };
+  // 9. Place the pending pin (note or archive reference) at a tapped point on the page
+  const handlePlacePin = useCallback(
+    async (x_percent: number, y_percent: number) => {
+      if (!id || !pendingPin) return;
+      const pin = pendingPin;
+      setPendingPin(null);
 
-  // 10. Pin Kin Archive asset to current page
-  const handlePinArchiveAsset = async (assetId: string) => {
-    if (!id) return;
-    const asset = KIN_ARCHIVE_BY_ID[assetId];
-    const newAnn = await addAnnotation({
-      book_id: id,
-      page_number: currentPage,
-      type: 'archive_ref',
-      content: asset?.title || 'Studio reference',
-      ref_archive_asset_id: assetId,
-      x_percent: 50,
-      y_percent: 35,
-    });
-    if (newAnn) {
-      showToast({ type: 'success', message: `Pinned ${asset?.code} to page ${currentPage}` });
-    }
-  };
+      if (pin.type === 'note') {
+        const newAnn = await addAnnotation({
+          book_id: id,
+          page_number: currentPage,
+          type: 'note',
+          content: 'Observation on page ' + currentPage,
+          x_percent,
+          y_percent,
+        });
+        if (newAnn) showToast({ type: 'success', message: `Note placed on page ${currentPage}` });
+      } else {
+        const asset = KIN_ARCHIVE_BY_ID[pin.assetId];
+        const newAnn = await addAnnotation({
+          book_id: id,
+          page_number: currentPage,
+          type: 'archive_ref',
+          content: asset?.title || 'Studio reference',
+          ref_archive_asset_id: pin.assetId,
+          x_percent,
+          y_percent,
+        });
+        if (newAnn) showToast({ type: 'success', message: `Pinned ${asset?.code} to page ${currentPage}` });
+      }
+    },
+    [id, currentPage, pendingPin, addAnnotation, showToast]
+  );
 
   // 11. Keyboard shortcuts
   useEffect(() => {
@@ -378,31 +378,19 @@ export const ReaderScreen: React.FC = () => {
         case 'b':
         case 'B':
           e.preventDefault();
-          handleToggleBookmark();
-          break;
-        case 'f':
-        case 'F':
-          e.preventDefault();
-          setIsFocusMode((f) => !f);
-          break;
-        case 'q':
-        case 'Q':
-          e.preventDefault();
-          setIsQuietReading((q) => !q);
+          void handleToggleBookmark();
           break;
         case 'Escape':
           if (bridgeSessionIdRef.current) {
             e.preventDefault();
             closeBridge('explicit');
-          } else if (isAddingNote) {
+          } else if (pinChooserOpen || pendingPin) {
             e.preventDefault();
-            setIsAddingNote(false);
-          } else if (isFocusMode) {
+            setPinChooserOpen(false);
+            setPendingPin(null);
+          } else if (toolsOpen) {
             e.preventDefault();
-            setIsFocusMode(false);
-          } else if (activeSidebar) {
-            e.preventDefault();
-            setActiveSidebar(null);
+            setToolsOpen(false);
           }
           break;
         default:
@@ -412,30 +400,7 @@ export const ReaderScreen: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPage, handlePageChange, isFocusMode, isAddingNote, activeSidebar, handleToggleBookmark, closeBridge]);
-
-  // Chrome fade-on-read inactivity timer (3.5s)
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const resetTimer = () => {
-      setIsChromeFaded(false);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        setIsChromeFaded(true);
-      }, 3500);
-    };
-
-    resetTimer();
-
-    const events = ['mousemove', 'mousedown', 'scroll', 'touchstart', 'keydown'];
-    events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
-
-    return () => {
-      if (timer) clearTimeout(timer);
-      events.forEach((evt) => window.removeEventListener(evt, resetTimer));
-    };
-  }, []);
+  }, [currentPage, handlePageChange, handleToggleBookmark, pinChooserOpen, pendingPin, toolsOpen, closeBridge]);
 
   const swipeHandlers = useSwipeGesture({
     onSwipeLeft: () => {
@@ -467,50 +432,38 @@ export const ReaderScreen: React.FC = () => {
 
   const bookmarked = id ? isPageBookmarked(id, currentPage) : false;
   const hasUnreadRecap = bookSessions.some((s) => s.is_meaningful && s.recap && !s.recap_viewed_at);
+  const isChromeHidden = !isChromeVisible;
 
   return (
     <div
-      className={isQuietReading ? 'quiet-reading-active' : ''}
       style={{
         display: 'flex',
         flexDirection: 'column',
-        position: isFocusMode ? 'fixed' : 'relative',
-        inset: isFocusMode ? 0 : 'auto',
-        height: isFocusMode ? '100vh' : 'calc(100vh - 64px)',
-        zIndex: isFocusMode ? 9999 : 'auto',
+        position: isChromeHidden ? 'fixed' : 'relative',
+        inset: isChromeHidden ? 0 : 'auto',
+        height: '100vh',
+        zIndex: isChromeHidden ? 9999 : 'auto',
         backgroundColor: 'var(--color-background)',
         overflow: 'hidden',
       }}
     >
       <ReadingProgressBar currentPage={currentPage} totalPages={totalPages} />
 
-      {/* Top Toolbar in Kin Layer */}
-      <div className={`reader-kin-chrome ${isChromeFaded ? 'reader-kin-chrome-faded' : ''}`}>
-        <ReaderToolbar
-          bookTitle={book?.title || 'PDF Document'}
-          bookId={book?.id || ''}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          zoomScale={zoomScale}
-          isBookmarked={bookmarked}
-          isFocusMode={isFocusMode}
-          isAddingNote={isAddingNote}
-          hasUnreadRecap={hasUnreadRecap}
-          activeSidebar={activeSidebar}
-          onPageChange={handlePageChange}
-          onZoomChange={setZoomScale}
-          onToggleBookmark={handleToggleBookmark}
-          onToggleAddNote={() => setIsAddingNote(!isAddingNote)}
-          onToggleFocusMode={() => setIsFocusMode(!isFocusMode)}
-          onToggleSidebar={(sidebar) =>
-            setActiveSidebar((current) => (current === sidebar ? null : sidebar))
-          }
-          onFitWidth={() => setZoomScale(1.3)}
-          onFitPage={() => setZoomScale(1.0)}
-          isQuietReading={isQuietReading}
-          onToggleQuietReading={() => setIsQuietReading((q) => !q)}
-        />
-      </div>
+      {/* Chrome: top bar + page-position strip, shown/hidden as a single unit */}
+      {isChromeVisible && (
+        <div className="reader-kin-chrome">
+          <ReaderToolbar
+            bookTitle={book?.title || 'PDF Document'}
+            bookId={book?.id || ''}
+            isBookmarked={bookmarked}
+            hasUnreadRecap={hasUnreadRecap}
+            toolsOpen={toolsOpen}
+            onToggleBookmark={handleToggleBookmark}
+            onOpenTools={() => setToolsOpen((v) => !v)}
+          />
+          <ReaderPageStrip currentPage={currentPage} totalPages={totalPages} />
+        </div>
+      )}
 
       {/* Reader Main Layout */}
       <div {...swipeHandlers} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
@@ -556,13 +509,15 @@ export const ReaderScreen: React.FC = () => {
             zoomScale={zoomScale}
             bookTitle={book?.title || ''}
             annotations={pageAnnotations}
-            isAddingNote={isAddingNote}
-            onAddNoteAt={handleAddNoteAt}
+            pendingPin={pendingPin}
+            onPlacePin={handlePlacePin}
             onUpdateAnnotation={updateAnnotation}
             onDeleteAnnotation={deleteAnnotation}
             onLoadSuccess={handleDocumentLoadSuccess}
-            isQuietReading={isQuietReading}
-            isFocusMode={isFocusMode}
+            isChromeHidden={isChromeHidden}
+            onLeftTap={() => handlePageChange(currentPage - 1)}
+            onRightTap={() => handlePageChange(currentPage + 1)}
+            onCenterTap={() => setIsChromeVisible((v) => !v)}
           />
         )}
 
@@ -572,30 +527,36 @@ export const ReaderScreen: React.FC = () => {
             session={bridgeSession}
             isGenerating={bridgeGenerating}
             isMobile={isMobile}
-            isFocusMode={isFocusMode}
+            isChromeHidden={isChromeHidden}
             maxEditablePage={editableLimit}
-            sidebarOffset={activeSidebar && !isMobile ? 320 : 0}
+            sidebarOffset={toolsOpen && !isMobile ? 320 : 0}
             onClose={() => closeBridge('explicit')}
             onUpdateBoundaries={(start, end) => handleUpdateBoundaries(bridgeSession.id, start, end)}
             onRetry={() => handleRetryRecap(bridgeSession.id)}
           />
         )}
 
-        {/* Sidebar */}
-        {activeSidebar && (
-          <ReaderSidebar
-            mode={activeSidebar}
+        {isChromeVisible && (
+          <ReaderZoomStrip
+            zoomScale={zoomScale}
+            onZoomChange={setZoomScale}
+            onFitWidth={() => setZoomScale(1.3)}
+            onFitPage={() => setZoomScale(1.0)}
+          />
+        )}
+
+        {/* Tools panel */}
+        {toolsOpen && (
+          <ReaderToolsPanel
             totalPages={totalPages}
             currentPage={currentPage}
             bookmarks={bookmarks}
-            annotations={bookAnnotations}
             sessions={bookSessions}
             generatingSessionIds={generatingIds}
+            hasUnreadRecap={hasUnreadRecap}
             maxEditablePage={editableLimit}
             onSelectPage={handlePageChange}
             onRemoveBookmark={(bmId) => removeBookmark(bmId)}
-            onDeleteAnnotation={(annId) => deleteAnnotation(annId)}
-            onPinArchiveAsset={handlePinArchiveAsset}
             onUpdateSessionBoundaries={async (sessId, sPage, ePage) => {
               if (await handleUpdateBoundaries(sessId, sPage, ePage)) {
                 showToast({ type: 'success', message: `Session updated to pages ${sPage}–${Math.min(ePage, editableLimit)}` });
@@ -606,10 +567,30 @@ export const ReaderScreen: React.FC = () => {
               await deleteSession(sessId);
               showToast({ type: 'info', message: 'Reading session record deleted' });
             }}
-            onClose={() => setActiveSidebar(null)}
+            onStartAddPin={() => {
+              setToolsOpen(false);
+              setPinChooserOpen(true);
+            }}
+            onClose={() => setToolsOpen(false)}
           />
         )}
       </div>
+
+      {/* Add Pin chooser */}
+      {pinChooserOpen && (
+        <AddPinChooser
+          currentPage={currentPage}
+          onChooseNote={() => {
+            setPendingPin({ type: 'note' });
+            setPinChooserOpen(false);
+          }}
+          onChooseArchiveAsset={(assetId) => {
+            setPendingPin({ type: 'archive_ref', assetId });
+            setPinChooserOpen(false);
+          }}
+          onClose={() => setPinChooserOpen(false)}
+        />
+      )}
     </div>
   );
 };

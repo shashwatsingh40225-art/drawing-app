@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { EyeMark } from '../components/EyeMark';
 import { useAuthStore } from '../stores/authStore';
 import { isSupabaseDemoMode } from '../lib/supabase';
 import { ArrowRight, Sparkles } from 'lucide-react';
@@ -59,7 +58,7 @@ export const LoginScreen: React.FC = () => {
       {/* Brand Header */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <div style={{ display: 'inline-block', marginBottom: '12px' }}>
-          <EyeMark size={48} />
+          <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '56px', width: 'auto' }} />
         </div>
         <h1
           style={{

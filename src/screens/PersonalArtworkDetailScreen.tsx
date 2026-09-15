@@ -51,7 +51,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
     return (
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '60px 24px' }}>
         <EmptyState
-          artworkSrc="/artist-reference/art-09.jpeg"
+          artworkSrc="/brand/illustrations/art-09-card.png"
           headline="Drawing Not Found"
           description="This artwork may have been removed or does not exist in your sketchbook."
           actionLabel="Return to Sketchbook"

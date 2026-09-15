@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Archive, Filter, Sparkles } from 'lucide-react';
+import { Filter, Sparkles } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ArtworkMat } from '../components/ui/ArtworkMat';
 import { Badge } from '../components/ui/Badge';
@@ -99,14 +99,24 @@ export const ArchiveScreen: React.FC = () => {
         <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-lg)', marginBottom: '24px' }}>
           <div
             className="hero-atmosphere"
-            style={{ backgroundImage: 'url(/artist-reference/art-06.jpeg)' }}
+            style={{ backgroundImage: 'url(/brand/pattern-feather.png)', backgroundSize: '420px', backgroundRepeat: 'repeat' }}
           />
-          <PageHeader
-            icon={<Archive size={16} />}
-            eyebrowLabel="Kin Archive — Studio Collection"
-            title="Kin Archive"
-            description="Twenty first-party artworks bundled with Kin Studio. Browse, explore, and reference them for your artistic practice."
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap', position: 'relative', paddingBottom: '20px', borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ flex: '1 1 320px' }}>
+              <PageHeader
+                icon={<img src="/brand/icon-eyeorb-40.png" alt="" style={{ width: '15px', height: '15px', objectFit: 'contain' }} />}
+                eyebrowLabel="Kin Archive — Finding Kindred Work"
+                title="Kin Archive"
+                description="Twenty first-party artworks bundled with Kin Studio. Browse, explore, and reference them for your artistic practice."
+                style={{ marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}
+              />
+            </div>
+            <ArtworkMat
+              imageUrl="/brand/illustrations/art-06-card.png"
+              alt="ART-06: Ceremonial mask illustration"
+              style={{ width: '150px', height: '150px', flex: '0 0 auto' }}
+            />
+          </div>
         </div>
 
         {/* Categories and Label Bar */}

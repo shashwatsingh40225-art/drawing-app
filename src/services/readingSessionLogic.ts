@@ -20,7 +20,7 @@ export const SESSION_RULES = {
   IDLE_CAP_MS: 5 * 60_000,
   /** Largest slice of time a single tick may credit (guards against timers frozen by the OS). */
   MAX_TICK_MS: 15_000,
-  /** A break this long ends the session; also the minimum gap before "Previously…" is offered. */
+  /** A break this long ends the session. */
   SESSION_BREAK_MS: 30 * 60_000,
   /** Navigating further than this outside the pages read in this session is a jump. */
   JUMP_PAGES: 4,
@@ -34,6 +34,14 @@ export const SESSION_RULES = {
   /** A recap covers at most this many trailing pages of a very long session. */
   MAX_RECAP_PAGES: 150,
 } as const;
+
+/**
+ * Minimum gap since the last activity on a book before "Previously…" proactively surfaces.
+ * Deliberately decoupled from SESSION_BREAK_MS (ADR 0002): ending a session is a technical
+ * signal ("did activity stop"), while surfacing a recap is a product judgment ("has enough time
+ * passed that a reminder is actually useful"). A short reading break should never trigger it.
+ */
+export const MEMORY_BRIDGE_MIN_GAP_MS = 60 * 60_000;
 
 export interface TrackerState {
   v: 1;
@@ -242,7 +250,7 @@ export function maxEditablePage(sessions: SessionSummary[], progressPage: number
 export function pickBridgeSession<T extends SessionSummary>(sessions: T[], now: number): T | null {
   if (sessions.length === 0) return null;
   const lastEnded = Math.max(...sessions.map((s) => Date.parse(s.ended_at) || 0));
-  if (now - lastEnded < SESSION_RULES.SESSION_BREAK_MS) return null;
+  if (now - lastEnded < MEMORY_BRIDGE_MIN_GAP_MS) return null;
 
   let latest: T | null = null;
   for (const s of sessions) {

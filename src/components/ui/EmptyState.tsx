@@ -12,7 +12,7 @@ interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  artworkSrc = '/artist-reference/art-01.jpeg',
+  artworkSrc = '/brand/illustrations/art-01-card.png',
   headline,
   description,
   actionLabel,

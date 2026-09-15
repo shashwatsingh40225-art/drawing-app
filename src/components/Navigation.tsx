@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { EyeMark } from './EyeMark';
 import { useAuthStore } from '../stores/authStore';
 import { 
   BookOpen, 
@@ -162,7 +161,7 @@ export const Navigation: React.FC<NavigationProps> = () => {
           }}
           aria-label="Kin Home"
         >
-          <EyeMark size={32} />
+          <img src="/brand/logo-mark-simple-48.png" alt="Kin logo mark" style={{ height: '32px', width: '32px', objectFit: 'contain' }} />
           <div>
             <div
               style={{

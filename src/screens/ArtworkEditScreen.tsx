@@ -87,7 +87,7 @@ export const ArtworkEditScreen: React.FC = () => {
     return (
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '60px 24px' }}>
         <EmptyState
-          artworkSrc="/artist-reference/art-09.jpeg"
+          artworkSrc="/brand/illustrations/art-09-card.png"
           headline="Artwork Not Found"
           description="Could not locate this drawing to edit."
           actionLabel="Return to Sketchbook"

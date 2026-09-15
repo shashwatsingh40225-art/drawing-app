@@ -3,12 +3,14 @@ import { StickyNote, Trash2, ExternalLink, X, Check, Pin, Sparkles } from 'lucid
 import { PageAnnotation } from '../../types/book';
 import { KIN_ARCHIVE_BY_ID } from '../../data/kinArchive';
 
+export type PendingPin = { type: 'note' } | { type: 'archive_ref'; assetId: string };
+
 interface AnnotationOverlayProps {
   bookId: string;
   pageNumber: number;
   annotations: PageAnnotation[];
-  isAddingNote: boolean;
-  onAddNoteAt: (x_percent: number, y_percent: number) => void;
+  pendingPin: PendingPin | null;
+  onPlacePin: (x_percent: number, y_percent: number) => void;
   onUpdateAnnotation: (id: string, updates: Partial<PageAnnotation>) => void;
   onDeleteAnnotation: (id: string) => void;
 }
@@ -17,8 +19,8 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   bookId,
   pageNumber,
   annotations,
-  isAddingNote,
-  onAddNoteAt,
+  pendingPin,
+  onPlacePin,
   onUpdateAnnotation,
   onDeleteAnnotation,
 }) => {
@@ -27,14 +29,17 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
   const [editText, setEditText] = useState('');
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isAddingNote || !containerRef.current) return;
+    if (!pendingPin || !containerRef.current) return;
+    e.stopPropagation();
 
     const rect = containerRef.current.getBoundingClientRect();
     const x_percent = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
     const y_percent = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
 
-    onAddNoteAt(x_percent, y_percent);
+    onPlacePin(x_percent, y_percent);
   };
+
+  const pendingArchiveAsset = pendingPin?.type === 'archive_ref' ? KIN_ARCHIVE_BY_ID[pendingPin.assetId] : null;
 
   const handleOpenEdit = (ann: PageAnnotation, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -52,16 +57,18 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
     <div
       ref={containerRef}
       onClick={handleContainerClick}
+      onPointerDown={(e) => pendingPin && e.stopPropagation()}
+      onPointerUp={(e) => pendingPin && e.stopPropagation()}
       style={{
         position: 'absolute',
         inset: 0,
-        pointerEvents: isAddingNote ? 'auto' : 'none',
-        cursor: isAddingNote ? 'crosshair' : 'default',
+        pointerEvents: pendingPin ? 'auto' : 'none',
+        cursor: pendingPin ? 'crosshair' : 'default',
         zIndex: 5,
       }}
     >
-      {/* Banner hint when in note-dropping mode */}
-      {isAddingNote && (
+      {/* Banner hint while placing a pin */}
+      {pendingPin && (
         <div
           style={{
             position: 'absolute',
@@ -79,10 +86,15 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
             gap: '6px',
             boxShadow: 'var(--shadow-card)',
             pointerEvents: 'none',
+            textAlign: 'center',
           }}
         >
           <Pin size={13} color="var(--color-accent)" />
-          <span>Click anywhere on the page to place a note</span>
+          <span>
+            {pendingArchiveAsset
+              ? `Tap the page to place ${pendingArchiveAsset.title}`
+              : 'Tap the page to place your note'}
+          </span>
         </div>
       )}
 
@@ -103,34 +115,51 @@ export const AnnotationOverlay: React.FC<AnnotationOverlayProps> = ({
               zIndex: isSelected ? 30 : 10,
             }}
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
           >
-            {/* Note Pin Icon Button */}
+            {/* Note Pin Icon Button with >= 44x44px touch hitbox for mobile & tablet */}
             <button
               type="button"
               onClick={(e) => handleOpenEdit(ann, e)}
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: 'var(--radius-full)',
-                backgroundColor: isSelected
-                  ? 'var(--color-accent)'
-                  : archiveRef
-                  ? 'var(--color-secondary)'
-                  : 'var(--color-primary)',
-                color: '#FFFFFF',
-                border: '2px solid #FFFFFF',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                minWidth: '44px',
+                minHeight: '44px',
+                padding: '6px',
+                background: 'none',
+                border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transition: 'transform 150ms ease, background-color 150ms ease',
+                WebkitTapHighlightColor: 'transparent',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.15)')}
-              onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
               title={ann.content || 'Page Note'}
+              aria-label={ann.content || 'Page Note'}
             >
-              {archiveRef ? <Sparkles size={14} /> : <StickyNote size={14} />}
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: isSelected
+                    ? 'var(--color-accent)'
+                    : archiveRef
+                    ? 'var(--color-secondary)'
+                    : 'var(--color-primary)',
+                  color: '#FFFFFF',
+                  border: '2px solid #FFFFFF',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'transform 150ms ease, background-color 150ms ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.15)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+              >
+                {archiveRef ? <Sparkles size={14} /> : <StickyNote size={14} />}
+              </div>
             </button>
 
             {/* Note Editor / Details Popover */}

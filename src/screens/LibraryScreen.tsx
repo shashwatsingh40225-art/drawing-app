@@ -251,7 +251,7 @@ export const LibraryScreen: React.FC = () => {
       {/* Empty State */}
       {!loading && books.length === 0 && !showUploadModal && (
         <EmptyState
-          artworkSrc="/artist-reference/art-12.jpeg"
+          artworkSrc="/brand/illustrations/art-01-card.png"
           headline="Your library is empty"
           description="Upload art reference manuals, anatomical studies, tutorials, or scanned sketchbooks. They remain completely private to your account and easy to study."
           actionLabel="Upload Your First Book"

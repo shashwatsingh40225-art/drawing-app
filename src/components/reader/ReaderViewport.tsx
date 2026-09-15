@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page } from 'react-pdf';
 import { ConcentricPortal } from '../ConcentricPortal';
-import { AnnotationOverlay } from './AnnotationOverlay';
+import { AnnotationOverlay, PendingPin } from './AnnotationOverlay';
 import { AlertCircle, RefreshCw, BookOpen } from 'lucide-react';
 import { PageAnnotation } from '../../types/book';
+import { useTapZones } from '../../hooks/useTapZones';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -14,14 +15,17 @@ interface ReaderViewportProps {
   zoomScale: number;
   bookTitle: string;
   annotations: PageAnnotation[];
-  isAddingNote: boolean;
-  onAddNoteAt: (x: number, y: number) => void;
+  pendingPin: PendingPin | null;
+  onPlacePin: (x: number, y: number) => void;
   onUpdateAnnotation: (id: string, updates: Partial<PageAnnotation>) => void;
   onDeleteAnnotation: (id: string) => void;
   onLoadSuccess: (numPages: number) => void;
   onLoadError?: (error: Error) => void;
-  isQuietReading?: boolean;
-  isFocusMode?: boolean;
+  isChromeHidden?: boolean;
+  /** Zone-based tap navigation (decision 2): left third = previous, right third = next, center = chrome toggle. */
+  onLeftTap: () => void;
+  onCenterTap: () => void;
+  onRightTap: () => void;
 }
 
 export const ReaderViewport: React.FC<ReaderViewportProps> = ({
@@ -31,17 +35,20 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   zoomScale,
   bookTitle,
   annotations,
-  isAddingNote,
-  onAddNoteAt,
+  pendingPin,
+  onPlacePin,
   onUpdateAnnotation,
   onDeleteAnnotation,
   onLoadSuccess,
   onLoadError,
-  isQuietReading = false,
-  isFocusMode = false,
+  isChromeHidden = false,
+  onLeftTap,
+  onCenterTap,
+  onRightTap,
 }) => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const tapZoneHandlers = useTapZones({ onLeftTap, onCenterTap, onRightTap });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(() => {
@@ -115,13 +122,15 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   const effectivePageWidth = Math.round(baseFitWidth * zoomScale);
   const isOverflowing = effectivePageWidth > containerWidth;
 
-  const isCompactVertical = isFocusMode || isLandscapePhone;
+  const isCompactVertical = isChromeHidden || isLandscapePhone;
   const bottomPadding = isCompactVertical ? '16px' : '80px';
   const topPadding = isLandscapePhone ? '12px' : '24px';
 
   return (
     <div
       ref={containerRef}
+      onPointerDown={tapZoneHandlers.onPointerDown}
+      onPointerUp={tapZoneHandlers.onPointerUp}
       style={{
         flex: 1,
         width: '100%',
@@ -186,8 +195,8 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
               bookId={bookId}
               pageNumber={currentPage}
               annotations={annotations}
-              isAddingNote={isAddingNote}
-              onAddNoteAt={onAddNoteAt}
+              pendingPin={pendingPin}
+              onPlacePin={onPlacePin}
               onUpdateAnnotation={onUpdateAnnotation}
               onDeleteAnnotation={onDeleteAnnotation}
             />
@@ -259,7 +268,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
           >
             <div
               key={currentPage}
-              className={`reader-reading-layer ${isQuietReading ? '' : 'page-turn-transition'}`}
+              className="reader-reading-layer page-turn-transition"
               style={{
                 width: '100%',
                 position: 'relative',
@@ -276,17 +285,15 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
                   </div>
                 }
               />
-              {!isQuietReading && (
-                <AnnotationOverlay
-                  bookId={bookId}
-                  pageNumber={currentPage}
-                  annotations={annotations}
-                  isAddingNote={isAddingNote}
-                  onAddNoteAt={onAddNoteAt}
-                  onUpdateAnnotation={onUpdateAnnotation}
-                  onDeleteAnnotation={onDeleteAnnotation}
-                />
-              )}
+              <AnnotationOverlay
+                bookId={bookId}
+                pageNumber={currentPage}
+                annotations={annotations}
+                pendingPin={pendingPin}
+                onPlacePin={onPlacePin}
+                onUpdateAnnotation={onUpdateAnnotation}
+                onDeleteAnnotation={onDeleteAnnotation}
+              />
             </div>
           </Document>
         </div>

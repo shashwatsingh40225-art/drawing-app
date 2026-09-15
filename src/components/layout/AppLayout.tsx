@@ -20,12 +20,17 @@ export function AppLayout() {
   }, [initialize]);
 
   // Auth guard: Protect personal art, library, reader, and upload routes
-  const isProtectedRoute = 
+  const isProtectedRoute =
     location.pathname.startsWith('/my-art') ||
     location.pathname.startsWith('/sketchbook') || // legacy redirect still protected
     location.pathname.startsWith('/library') ||
     location.pathname.startsWith('/reader') ||
     location.pathname.startsWith('/upload');
+
+  // The Reader owns its whole screen — its toolbar already covers Back/Bookmark/Tools
+  // navigation, so the global header/bottom-nav/footer would only double up on chrome
+  // and eat into the reading area (most costly on a phone-height viewport).
+  const isReaderRoute = location.pathname.startsWith('/reader/');
 
   useEffect(() => {
     if (!loading && !user && isProtectedRoute) {
@@ -67,13 +72,13 @@ export function AppLayout() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navigation />
-      <main className="screen-with-bottom-nav" style={{ flex: 1 }}>
+      {!isReaderRoute && <Navigation />}
+      <main className={isReaderRoute ? undefined : 'screen-with-bottom-nav'} style={{ flex: 1 }}>
         <Outlet />
       </main>
 
       {/* Global Studio Footer */}
-      <footer
+      {!isReaderRoute && <footer
         style={{
           borderTop: '1px solid var(--color-border)',
           backgroundColor: 'var(--color-surface)',
@@ -120,7 +125,7 @@ export function AppLayout() {
             </Link>
           </div>
         </div>
-      </footer>
+      </footer>}
     </div>
   );
 }

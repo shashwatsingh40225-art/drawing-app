@@ -40,11 +40,11 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
       }}
     >
       {/* Background Chalk Silhouette Echo (ART-07 / ART-08) */}
-      <div 
+      <div
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: `url('/artist-reference/art-07.jpeg')`,
+          backgroundImage: `url('/brand/illustrations/art-07-card.png')`,
           backgroundPosition: 'center 40%',
           backgroundSize: 'cover',
           opacity: 0.08,
@@ -55,18 +55,31 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
       />
 
       {/* Floating secondary atmospheric sketch (ART-08 arm/torso gesture) */}
-      <div 
+      <div
         style={{
           position: 'absolute',
           right: '5%',
           bottom: '5%',
           width: '320px',
           height: '320px',
-          backgroundImage: `url('/artist-reference/art-08.jpeg')`,
+          backgroundImage: `url('/brand/illustrations/art-08-card.png')`,
           backgroundSize: 'contain',
           backgroundRepeat: 'no-repeat',
           opacity: 0.06,
           mixBlendMode: 'screen',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Ring texture backdrop — tileable pattern, meant for a portal/loading surface */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `url('/brand/pattern-rings.png')`,
+          backgroundSize: '340px',
+          backgroundRepeat: 'repeat',
+          opacity: 0.07,
           pointerEvents: 'none',
         }}
       />

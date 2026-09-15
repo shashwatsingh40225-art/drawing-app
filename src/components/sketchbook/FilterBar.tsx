@@ -97,6 +97,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {/* Search Tag Input */}
         <div
           style={{
+            position: 'relative',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -106,8 +107,25 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             padding: '6px 14px',
             flex: '1 1 220px',
             maxWidth: '340px',
+            overflow: 'hidden',
           }}
         >
+          <img
+            src="/brand/icon-claw-40.png"
+            alt=""
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: '-6px',
+              top: '-8px',
+              width: '30px',
+              height: '30px',
+              objectFit: 'contain',
+              opacity: 0.16,
+              pointerEvents: 'none',
+              transform: 'rotate(12deg)',
+            }}
+          />
           <Search size={15} color={world.textMuted} />
           <input
             type="text"
@@ -126,18 +144,25 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           />
           {filters.searchTag && (
             <button
+              type="button"
               onClick={() => onChange({ ...filters, searchTag: '' })}
               style={{
                 background: 'none',
                 border: 'none',
                 color: world.textMuted,
                 cursor: 'pointer',
-                padding: 0,
+                minWidth: '44px',
+                minHeight: '44px',
+                margin: '-12px -12px -12px 0',
+                padding: '12px',
                 display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                WebkitTapHighlightColor: 'transparent',
               }}
               aria-label="Clear search"
             >
-              <X size={14} />
+              <X size={15} />
             </button>
           )}
         </div>

@@ -119,7 +119,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 }
               />
               <EmptyState
-                artworkSrc="/artist-reference/art-01.jpeg"
+                artworkSrc="/brand/illustrations/art-01-card.png"
                 headline="Your sketchbook is waiting"
                 description="Upload your first drawing to start tracking your artistic journey, tags, and discovering kindred art."
                 actionLabel="Upload First Drawing"
@@ -567,7 +567,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         >
           <div
             className="hero-atmosphere"
-            style={{ backgroundImage: 'url(/artist-reference/art-03.jpeg)' }}
+            style={{ backgroundImage: 'url(/brand/pattern-feather.png)', backgroundSize: '420px', backgroundRepeat: 'repeat' }}
           />
           {/* Left Column: Headline & Value Proposition */}
           <div style={{ maxWidth: '580px' }}>
@@ -719,8 +719,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 padding: '12px',
               }}
             >
-              <img 
-                src="/artist-reference/art-03.jpeg" 
+              <img
+                src="/brand/illustrations/art-03-card.png"
                 alt="ART-03: Winged pink creature in flight with detached eye orb"
                 className="artwork-img-blend"
                 style={{

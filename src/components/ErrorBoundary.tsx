@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
             }}
           >
             <img
-              src="/artist-reference/art-09.jpeg"
+              src="/brand/illustrations/art-09-card.png"
               alt="Friendly mushroom creature"
               style={{ maxHeight: '160px', width: 'auto' }}
             />

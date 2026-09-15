@@ -274,11 +274,15 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
                 border: 'none',
                 cursor: 'pointer',
                 color: world.textMuted,
-                padding: '4px',
+                minWidth: '44px',
+                minHeight: '44px',
+                margin: '-8px -10px -8px 0',
+                padding: '6px',
                 borderRadius: 'var(--radius-sm)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                WebkitTapHighlightColor: 'transparent',
               }}
               aria-label="Book actions"
             >

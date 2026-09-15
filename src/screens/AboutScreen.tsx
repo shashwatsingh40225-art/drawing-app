@@ -1,6 +1,5 @@
 import React from 'react';
 import { FeatherDivider } from '../components/FeatherDivider';
-import { EyeMark } from '../components/EyeMark';
 
 export const AboutScreen: React.FC = () => {
   return (
@@ -9,7 +8,7 @@ export const AboutScreen: React.FC = () => {
         {/* Eyebrow & Title */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <EyeMark size={24} />
+            <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '28px', width: 'auto' }} />
             <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-secondary)', fontWeight: 600 }}>
               Studio Manifesto & Folio Notes
             </span>
@@ -58,8 +57,8 @@ export const AboutScreen: React.FC = () => {
               padding: '20px'
             }}
           >
-            <img 
-              src="/artist-reference/art-04.jpeg" 
+            <img
+              src="/brand/illustrations/art-04-card.jpg"
               alt="ART-04: Lemur-headed figure in Victorian gown holding a teacup"
               className="artwork-img-blend"
               style={{ maxHeight: '560px', maxWidth: '100%', width: 'auto' }}
@@ -157,8 +156,8 @@ export const AboutScreen: React.FC = () => {
               padding: '16px'
             }}
           >
-            <img 
-              src="/artist-reference/art-19.jpeg" 
+            <img
+              src="/brand/illustrations/art-19-card.png"
               alt="ART-19: Beaked figure with afro and swirling smoke lines"
               className="artwork-img-blend"
               style={{ maxHeight: '480px', maxWidth: '100%', width: 'auto' }}
@@ -221,8 +220,8 @@ export const AboutScreen: React.FC = () => {
               padding: '20px'
             }}
           >
-            <img 
-              src="/artist-reference/art-20.jpeg" 
+            <img
+              src="/brand/illustrations/art-20-card.png"
               alt="ART-20: Bird of dense layered feathers in monochrome ink wash"
               className="artwork-img-blend"
               style={{ maxHeight: '580px', maxWidth: '100%', width: 'auto' }}

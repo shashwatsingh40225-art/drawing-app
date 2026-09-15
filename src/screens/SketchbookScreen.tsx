@@ -167,7 +167,7 @@ export const SketchbookScreen: React.FC = () => {
         {artworks.length === 0 && !loading ? (
           <div style={{ textAlign: 'center', padding: '64px 24px' }}>
             <img
-              src="/artist-reference/art-01.jpeg"
+              src="/brand/illustrations/art-01-card.png"
               alt="Crane in top hat illustration"
               className="artwork-img-blend"
               style={{ width: '200px', margin: '0 auto 16px auto', display: 'block', opacity: 0.85 }}
@@ -211,7 +211,7 @@ export const SketchbookScreen: React.FC = () => {
           </div>
         ) : filteredArtworks.length === 0 && !loading ? (
           <EmptyState
-            artworkSrc="/artist-reference/art-01.jpeg"
+            artworkSrc="/brand/illustrations/art-01-card.png"
             headline="No artworks match your filters"
             description="Try adjusting your medium, status, or search keywords to view your drawings."
             actionLabel="Clear All Filters"
