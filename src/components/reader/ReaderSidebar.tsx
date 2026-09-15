@@ -25,7 +25,9 @@ interface ReaderSidebarProps {
   bookmarks: Bookmark[];
   annotations?: PageAnnotation[];
   sessions?: ReadingSession[];
-  isGeneratingRecap?: boolean;
+  generatingSessionIds?: Record<string, boolean>;
+  /** Highest page the reader has reached; corrections cannot extend past it. */
+  maxEditablePage?: number;
   onSelectPage: (page: number) => void;
   onRemoveBookmark: (id: string) => void;
   onDeleteAnnotation?: (id: string) => void;
@@ -43,7 +45,8 @@ export const ReaderSidebar: React.FC<ReaderSidebarProps> = ({
   bookmarks,
   annotations = [],
   sessions = [],
-  isGeneratingRecap = false,
+  generatingSessionIds = {},
+  maxEditablePage,
   onSelectPage,
   onRemoveBookmark,
   onDeleteAnnotation,
@@ -611,7 +614,14 @@ export const ReaderSidebar: React.FC<ReaderSidebarProps> = ({
                             onClick={async () => {
                               const s = parseInt(editStart, 10);
                               const e = parseInt(editEnd, 10);
-                              if (!isNaN(s) && !isNaN(e) && s >= 1 && e >= s && onUpdateSessionBoundaries) {
+                              if (
+                                !isNaN(s) &&
+                                !isNaN(e) &&
+                                s >= 1 &&
+                                e >= s &&
+                                (!maxEditablePage || e <= maxEditablePage) &&
+                                onUpdateSessionBoundaries
+                              ) {
                                 setSavingEdit(true);
                                 try {
                                   await onUpdateSessionBoundaries(sess.id, s, e);
@@ -652,14 +662,14 @@ export const ReaderSidebar: React.FC<ReaderSidebarProps> = ({
                           >
                             {sess.recap}
                           </div>
-                        ) : sess.recap_error ? (
+                        ) : sess.recap_error && !generatingSessionIds[sess.id] ? (
                           <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', backgroundColor: 'rgba(0,0,0,0.03)', padding: '5px 8px', borderRadius: '4px' }}>
                             <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>Recap note: </span>
                             {sess.recap_error}
                           </div>
                         ) : sess.is_meaningful ? (
                           <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontStyle: 'italic', padding: '4px 0' }}>
-                            {isGeneratingRecap ? 'Generating AI memory bridge…' : 'Meaningful session recorded. Recap not yet generated.'}
+                            {generatingSessionIds[sess.id] ? 'Recalling this session…' : 'Recap not generated yet.'}
                           </div>
                         ) : (
                           <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', padding: '2px 0' }}>
@@ -726,7 +736,7 @@ export const ReaderSidebar: React.FC<ReaderSidebarProps> = ({
                               <span>Edit</span>
                             </button>
 
-                            {onRegenerateSessionRecap && (
+                            {onRegenerateSessionRecap && sess.is_meaningful && !sess.recap && !generatingSessionIds[sess.id] && (
                               <button
                                 type="button"
                                 onClick={() => onRegenerateSessionRecap(sess.id)}
@@ -744,7 +754,7 @@ export const ReaderSidebar: React.FC<ReaderSidebarProps> = ({
                                 title="Regenerate memory bridge recap"
                               >
                                 <RotateCcw size={11} />
-                                <span>{sess.recap ? 'Regen' : 'Generate'}</span>
+                                <span>Get recap</span>
                               </button>
                             )}
                           </div>

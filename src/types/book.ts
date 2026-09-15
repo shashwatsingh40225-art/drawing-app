@@ -95,8 +95,9 @@ export interface BookUploadState {
 }
 
 /**
- * ReadingSession — represents a contiguous portion of reading activity.
- * Tracks start and end positions, duration, and AI memory bridge recap.
+ * ReadingSession — the stretch of a book read in one sitting, inferred automatically
+ * (see services/readingSessionLogic.ts). The page range is incremental: it covers the new
+ * content of this session, so consecutive sessions produce consecutive recaps.
  * Stored in Supabase table: reading_sessions (with localStorage fallback).
  */
 export interface ReadingSession {
@@ -104,25 +105,22 @@ export interface ReadingSession {
   user_id: string;
   book_id: string;
   started_at: string;        // ISO datetime
-  ended_at: string;          // ISO datetime
+  ended_at: string;          // ISO datetime — last moment of active reading
   start_page: number;        // 1-indexed
-  end_page: number;          // 1-indexed
-  start_position?: number;   // 0.0 - 1.0 scroll offset
-  end_position?: number;     // 0.0 - 1.0 scroll offset
+  end_page: number;          // 1-indexed, never beyond a page the reader reached
+  start_position?: number;   // legacy column, unused
+  end_position?: number;     // legacy column, unused
   duration_seconds: number;  // active reading time in seconds
-  pages_read: number;        // number of pages covered
-  is_meaningful: boolean;    // whether session met threshold for AI recap
-  recap: string | null;      // AI memory bridge recap (~30s read)
-  recap_error?: string | null; // Error message if AI generation failed (prevents infinite re-querying)
+  pages_read: number;        // pages in [start_page, end_page]
+  is_meaningful: boolean;    // deterministic threshold met — eligible for a recap
+  recap: string | null;      // "Previously…" memory bridge (~30s read)
   recap_generated_at: string | null;
   recap_viewed_at: string | null;
   created_at: string;        // ISO datetime
   updated_at: string;        // ISO datetime
-}
-
-export interface RecapGenerationOptions {
-  bookTitle?: string;
-  author?: string;
-  forceRegenerate?: boolean;
+  // Local-only (not database columns)
+  recap_error?: string | null;
+  recap_error_code?: string | null; // decides whether a failed recap is retried automatically
+  sync_pending?: boolean;           // saved on this device, not yet on the server
 }
 

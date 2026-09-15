@@ -2,59 +2,41 @@ import { create } from 'zustand';
 import { supabase, isSupabaseDemoMode } from '../lib/supabase';
 import { useAuthStore } from './authStore';
 import { ReadingSession } from '../types/book';
+import { SessionDraft, computeFrontier, recapRangeFor } from '../services/readingSessionLogic';
 import { extractPdfTextRange } from '../services/pdfTextExtractor';
-import { generateSessionRecap } from '../services/geminiRecapService';
+import { isTransientRecapError, requestSessionRecap, RecapErrorCode } from '../services/geminiRecapService';
+import { getBookSignedUrl } from '../services/bookService';
 
 const LOCAL_STORAGE_KEY = 'kin_reading_sessions_cache';
 
+const REMOTE_COLUMNS =
+  'id,user_id,book_id,started_at,ended_at,start_page,end_page,duration_seconds,pages_read,is_meaningful,recap,recap_generated_at,recap_viewed_at,created_at,updated_at';
+
+export interface RecapBookSource {
+  filePath: string;
+  title: string;
+  author?: string;
+}
+
+export type RecapOutcome = 'ready' | 'skipped' | 'failed';
+
 interface ReadingSessionState {
   sessionsByBookId: Record<string, ReadingSession[]>;
-  activeSession: ReadingSession | null;
-  isGeneratingRecap: boolean;
-  generatingSessionId: string | null;
-  lastActiveTimestamp: number;
-  activeDwellSeconds: number;
-  visitedPagesInSession: Set<number>;
+  generatingIds: Record<string, boolean>;
 
-  // Actions
   fetchSessions: (bookId: string) => Promise<ReadingSession[]>;
-  getLatestMeaningfulSession: (bookId: string) => ReadingSession | undefined;
-  getLatestUnviewedMeaningfulSession: (bookId: string) => ReadingSession | undefined;
-  
-  startSession: (bookId: string, initialPage: number) => void;
-  recordPageActivity: (pageNumber: number, bookFilePath?: string, bookTitle?: string, author?: string) => void;
-  recordUserInteraction: () => void;
-  incrementActiveDwellTime: (seconds?: number) => void;
-
-  finalizeActiveSession: (
-    bookFilePath?: string,
-    bookTitle?: string,
-    author?: string
-  ) => Promise<ReadingSession | null>;
-
-  updateSessionBoundaries: (
-    sessionId: string,
-    startPage: number,
-    endPage: number,
-    bookFilePath?: string,
-    bookTitle?: string,
-    author?: string
-  ) => Promise<ReadingSession | null>;
-
-  generateRecapForSession: (
-    sessionId: string,
-    bookFilePath: string,
-    bookTitle: string,
-    author?: string
-  ) => Promise<boolean>;
-
-  markRecapViewed: (sessionId: string) => Promise<void>;
+  getFrontier: (bookId: string) => number;
+  /** Records a finished session. Local persistence is synchronous; the remote write follows. */
+  saveFinishedSession: (draft: SessionDraft) => ReadingSession;
+  /** Manual correction. Clamped to [1, maxPage]; a changed range invalidates the recap. */
+  updateSessionBoundaries: (sessionId: string, startPage: number, endPage: number, maxPage: number) => Promise<ReadingSession | null>;
+  generateRecap: (sessionId: string, book: RecapBookSource, options?: { force?: boolean }) => Promise<RecapOutcome>;
+  markRecapViewed: (sessionId: string) => void;
   deleteSession: (sessionId: string) => Promise<void>;
 }
 
 function loadLocalSessions(): Record<string, ReadingSession[]> {
   try {
-    if (typeof localStorage === 'undefined') return {};
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch {
@@ -64,638 +46,326 @@ function loadLocalSessions(): Record<string, ReadingSession[]> {
 
 function saveLocalSessions(data: Record<string, ReadingSession[]>) {
   try {
-    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   } catch (err) {
     console.warn('Could not persist reading sessions to localStorage:', err);
   }
 }
 
-function isDemoUser(): boolean {
-  if (isSupabaseDemoMode) return true;
+function isLiveUser(): boolean {
+  if (isSupabaseDemoMode) return false;
   const user = useAuthStore.getState().user;
-  return !user || user.id.startsWith('demo-');
+  return Boolean(user && !user.id.startsWith('demo-'));
 }
 
-/**
- * Deterministic Meaningful Session Evaluator (Req 6)
- * No ML classifier, no extra AI calls.
- * Evaluates movement, pages covered, active reading dwell time.
- */
-export function evaluateSessionMeaningfulness(
-  startPage: number,
-  endPage: number,
-  durationSeconds: number,
-  pagesCount: number
-): boolean {
-  const span = Math.abs(endPage - startPage) + 1;
+const byEndedDesc = (a: ReadingSession, b: ReadingSession) => Date.parse(b.ended_at) - Date.parse(a.ended_at);
 
-  // Case 1: Covered 3 or more pages with at least 35 seconds of reading activity
-  if (span >= 3 && durationSeconds >= 35) {
-    return true;
-  }
-
-  // Case 2: Covered 2 pages with at least 75 seconds of active reading
-  if (span >= 2 && durationSeconds >= 75) {
-    return true;
-  }
-
-  // Case 3: Deep study on 1-2 pages for at least 150 seconds (2.5 minutes)
-  if (durationSeconds >= 150 && pagesCount >= 1) {
-    return true;
-  }
-
-  // Case 4: Substantial reading progress (e.g. 4+ pages read even in fast reading mode)
-  if (span >= 4 && durationSeconds >= 30) {
-    return true;
-  }
-
-  return false;
+function toRemoteRow(s: ReadingSession, userId: string) {
+  return {
+    id: s.id,
+    user_id: userId,
+    book_id: s.book_id,
+    started_at: s.started_at,
+    ended_at: s.ended_at,
+    start_page: s.start_page,
+    end_page: s.end_page,
+    duration_seconds: s.duration_seconds,
+    pages_read: s.pages_read,
+    is_meaningful: s.is_meaningful,
+    recap: s.recap,
+    recap_generated_at: s.recap_generated_at,
+    recap_viewed_at: s.recap_viewed_at,
+    updated_at: s.updated_at,
+  };
 }
 
-export const useReadingSessionStore = create<ReadingSessionState>((set, get) => ({
-  sessionsByBookId: loadLocalSessions(),
-  activeSession: null,
-  isGeneratingRecap: false,
-  generatingSessionId: null,
-  lastActiveTimestamp: Date.now(),
-  activeDwellSeconds: 0,
-  visitedPagesInSession: new Set<number>(),
-
-  fetchSessions: async (bookId: string) => {
-    if (isDemoUser()) {
-      const local = get().sessionsByBookId[bookId] || [];
-      return local;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('reading_sessions')
-        .select('*')
-        .eq('book_id', bookId)
-        .order('ended_at', { ascending: false });
-
-      if (error) {
-        console.warn('Failed to fetch reading sessions from Supabase, using local:', error.message);
-        return get().sessionsByBookId[bookId] || [];
-      }
-
-      if (data) {
-        const nextMap = {
-          ...get().sessionsByBookId,
-          [bookId]: data,
-        };
-        set({ sessionsByBookId: nextMap });
-        saveLocalSessions(nextMap);
-        return data;
-      }
-
-      return get().sessionsByBookId[bookId] || [];
-    } catch {
-      return get().sessionsByBookId[bookId] || [];
-    }
-  },
-
-  getLatestMeaningfulSession: (bookId: string) => {
-    const list = (get().sessionsByBookId[bookId] || []).slice().sort(
-      (a, b) => new Date(b.ended_at).getTime() - new Date(a.ended_at).getTime()
-    );
-    return list.find((s) => s.is_meaningful);
-  },
-
-  getLatestUnviewedMeaningfulSession: (bookId: string) => {
-    const list = (get().sessionsByBookId[bookId] || []).slice().sort(
-      (a, b) => new Date(b.ended_at).getTime() - new Date(a.ended_at).getTime()
-    );
-    return list.find((s) => s.is_meaningful && !s.recap_viewed_at);
-  },
-
-  startSession: (bookId: string, initialPage: number) => {
-    const current = get().activeSession;
-    if (current) {
-      if (current.book_id === bookId) {
-        // If the session was initiated on default page before saved progress loaded (0 dwell, <= 1 page),
-        // re-anchor it to the true starting page!
-        if (current.duration_seconds === 0 && current.pages_read <= 1 && current.start_page !== initialPage) {
-          set({
-            activeSession: {
-              ...current,
-              start_page: initialPage,
-              end_page: initialPage,
-            },
-            visitedPagesInSession: new Set([initialPage]),
-            lastActiveTimestamp: Date.now(),
-          });
-        }
-        return;
-      } else {
-        // Switching to a different book: finalize previous book's session first!
-        get().finalizeActiveSession();
-      }
-    }
-
-    const now = new Date().toISOString();
-    const sessionId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : 'session-' + Date.now();
-
-    const user = useAuthStore.getState().user;
-    const userId = user?.id || 'demo-artist-01';
-
-    const newSession: ReadingSession = {
-      id: sessionId,
-      user_id: userId,
-      book_id: bookId,
-      started_at: now,
-      ended_at: now,
-      start_page: initialPage,
-      end_page: initialPage,
-      duration_seconds: 0,
-      pages_read: 1,
-      is_meaningful: false,
-      recap: null,
-      recap_error: null,
-      recap_generated_at: null,
-      recap_viewed_at: null,
-      created_at: now,
-      updated_at: now,
-    };
-
-    set({
-      activeSession: newSession,
-      activeDwellSeconds: 0,
-      lastActiveTimestamp: Date.now(),
-      visitedPagesInSession: new Set([initialPage]),
-    });
-  },
-
-  recordPageActivity: (pageNumber: number, bookFilePath?: string, bookTitle?: string, author?: string) => {
-    let active = get().activeSession;
-    if (!active) return;
-
-    // Detect non-contiguous navigation jump (> 3 pages away)
-    const lastPage = active.end_page;
-    const isJump = Math.abs(pageNumber - lastPage) > 3;
-
-    if (isJump) {
-      const visited = get().visitedPagesInSession;
-      const duration = get().activeDwellSeconds;
-      const wasMeaningful = evaluateSessionMeaningfulness(
-        active.start_page,
-        active.end_page,
-        duration,
-        visited.size
-      );
-
-      // If prior reading was meaningful or substantial, finalize it into its own session
-      if (wasMeaningful || (duration >= 30 && visited.size >= 2)) {
-        get().finalizeActiveSession(bookFilePath, bookTitle, author);
-        get().startSession(active.book_id, pageNumber);
-        return;
-      } else {
-        // Trivial glance before jumping: re-anchor to new page
-        set({
-          activeSession: {
-            ...active,
-            start_page: pageNumber,
-            end_page: pageNumber,
-            pages_read: 1,
-            ended_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          visitedPagesInSession: new Set([pageNumber]),
-          lastActiveTimestamp: Date.now(),
-        });
-        return;
-      }
-    }
-
-    const visited = new Set(get().visitedPagesInSession);
-    visited.add(pageNumber);
-
-    // Keep contiguous bounds for sequential reading
-    const newStart = Math.min(active.start_page, pageNumber);
-    const newEnd = Math.max(active.end_page, pageNumber);
-    const count = visited.size;
-
-    const updated: ReadingSession = {
-      ...active,
-      start_page: newStart,
-      end_page: newEnd,
-      pages_read: count,
-      ended_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    set({
-      activeSession: updated,
-      visitedPagesInSession: visited,
-      lastActiveTimestamp: Date.now(),
-    });
-  },
-
-  recordUserInteraction: () => {
-    set({ lastActiveTimestamp: Date.now() });
-  },
-
-  incrementActiveDwellTime: (seconds = 1) => {
-    const active = get().activeSession;
-    if (!active) return;
-
-    // Check inactivity: if reader has not interacted for > 3 minutes (180s), pause dwell increments
-    const idleMs = Date.now() - get().lastActiveTimestamp;
-    if (idleMs > 180000) {
-      return;
-    }
-
-    const currentDwell = get().activeDwellSeconds + seconds;
-    const updated: ReadingSession = {
-      ...active,
-      duration_seconds: currentDwell,
-      ended_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    set({
-      activeDwellSeconds: currentDwell,
-      activeSession: updated,
-    });
-  },
-
-  finalizeActiveSession: async (bookFilePath, bookTitle, author) => {
-    const active = get().activeSession;
-    if (!active) return null;
-
-    const duration = get().activeDwellSeconds;
-    const visited = get().visitedPagesInSession;
-    const pagesCount = visited.size;
-
-    // Discard completely trivial interactions (less than 10 seconds and 0 page turn)
-    if (duration < 10 && pagesCount <= 1) {
-      set({ activeSession: null, activeDwellSeconds: 0, visitedPagesInSession: new Set() });
-      return null;
-    }
-
-    const isMeaningful = evaluateSessionMeaningfulness(
-      active.start_page,
-      active.end_page,
-      duration,
-      pagesCount
-    );
-
-    const now = new Date().toISOString();
-    const finalSession: ReadingSession = {
-      ...active,
-      duration_seconds: duration,
-      pages_read: pagesCount,
-      is_meaningful: isMeaningful,
-      ended_at: now,
-      updated_at: now,
-    };
-
-    // Save into store immediately
-    const bookId = finalSession.book_id;
-    const currentList = get().sessionsByBookId[bookId] || [];
-    const nextList = [finalSession, ...currentList.filter((s) => s.id !== finalSession.id)];
-
-    const nextMap = {
-      ...get().sessionsByBookId,
-      [bookId]: nextList,
-    };
-
-    set({
-      sessionsByBookId: nextMap,
-      activeSession: null,
-      activeDwellSeconds: 0,
-      visitedPagesInSession: new Set(),
-    });
-    saveLocalSessions(nextMap);
-
-    // Persist to Supabase if live
-    if (!isDemoUser()) {
-      try {
-        await supabase.from('reading_sessions').upsert({
-          id: finalSession.id,
-          user_id: finalSession.user_id,
-          book_id: finalSession.book_id,
-          started_at: finalSession.started_at,
-          ended_at: finalSession.ended_at,
-          start_page: finalSession.start_page,
-          end_page: finalSession.end_page,
-          start_position: finalSession.start_position || 0,
-          end_position: finalSession.end_position || 0,
-          duration_seconds: finalSession.duration_seconds,
-          pages_read: finalSession.pages_read,
-          is_meaningful: finalSession.is_meaningful,
-          recap: finalSession.recap,
-          recap_generated_at: finalSession.recap_generated_at,
-          recap_viewed_at: finalSession.recap_viewed_at,
-        });
-      } catch (err) {
-        console.warn('Failed to upsert reading session in Supabase:', err);
-      }
-    }
-
-    // If meaningful and book path provided, trigger background AI recap generation
-    if (isMeaningful && bookFilePath && bookTitle && !finalSession.recap) {
-      get().generateRecapForSession(finalSession.id, bookFilePath, bookTitle, author);
-    }
-
-    return finalSession;
-  },
-
-  updateSessionBoundaries: async (sessionId, startPage, endPage, bookFilePath, bookTitle, author) => {
-    let targetBookId = '';
-    let targetSession: ReadingSession | null = null;
-
-    // Locate session in store
-    for (const [bId, list] of Object.entries(get().sessionsByBookId)) {
+export const useReadingSessionStore = create<ReadingSessionState>((set, get) => {
+  const find = (sessionId: string): ReadingSession | undefined => {
+    for (const list of Object.values(get().sessionsByBookId)) {
       const found = list.find((s) => s.id === sessionId);
-      if (found) {
-        targetBookId = bId;
-        targetSession = found;
-        break;
-      }
+      if (found) return found;
     }
+    return undefined;
+  };
 
-    if (!targetSession || !targetBookId) return null;
+  const writeList = (bookId: string, list: ReadingSession[]) => {
+    const next = { ...get().sessionsByBookId, [bookId]: list.slice().sort(byEndedDesc) };
+    set({ sessionsByBookId: next });
+    saveLocalSessions(next);
+  };
 
-    const normStart = Math.min(startPage, endPage);
-    const normEnd = Math.max(startPage, endPage);
-    const now = new Date().toISOString();
-
-    const isMeaningful = evaluateSessionMeaningfulness(
-      normStart,
-      normEnd,
-      targetSession.duration_seconds,
-      normEnd - normStart + 1
+  const patch = (sessionId: string, changes: Partial<ReadingSession>): ReadingSession | null => {
+    const current = find(sessionId);
+    if (!current) return null;
+    const updated = { ...current, ...changes };
+    writeList(
+      current.book_id,
+      (get().sessionsByBookId[current.book_id] ?? []).map((s) => (s.id === sessionId ? updated : s))
     );
-
-    // Invalidate recap since boundaries changed (Req 8, Req 17)
-    const updated: ReadingSession = {
-      ...targetSession,
-      start_page: normStart,
-      end_page: normEnd,
-      pages_read: normEnd - normStart + 1,
-      is_meaningful: isMeaningful,
-      recap: null,
-      recap_error: null,
-      recap_generated_at: null,
-      recap_viewed_at: null,
-      updated_at: now,
-    };
-
-    const bookList = get().sessionsByBookId[targetBookId] || [];
-    const nextList = bookList.map((s) => (s.id === sessionId ? updated : s));
-    const nextMap = {
-      ...get().sessionsByBookId,
-      [targetBookId]: nextList,
-    };
-
-    set({ sessionsByBookId: nextMap });
-    saveLocalSessions(nextMap);
-
-    if (!isDemoUser()) {
-      try {
-        await supabase.from('reading_sessions').update({
-          start_page: normStart,
-          end_page: normEnd,
-          pages_read: normEnd - normStart + 1,
-          is_meaningful: isMeaningful,
-          recap: null,
-          recap_generated_at: null,
-          recap_viewed_at: null,
-          updated_at: now,
-        }).eq('id', sessionId);
-      } catch (err) {
-        console.warn('Failed to update session boundaries in Supabase:', err);
-      }
-    }
-
-    // Automatically regenerate recap for the corrected boundaries if file is available
-    if (bookFilePath && bookTitle && isMeaningful) {
-      get().generateRecapForSession(sessionId, bookFilePath, bookTitle, author);
-    }
-
     return updated;
-  },
+  };
 
-  generateRecapForSession: async (sessionId, bookFilePath, bookTitle, author) => {
-    let targetBookId = '';
-    let targetSession: ReadingSession | null = null;
+  const setGenerating = (sessionId: string, on: boolean) => {
+    const next = { ...get().generatingIds };
+    if (on) next[sessionId] = true;
+    else delete next[sessionId];
+    set({ generatingIds: next });
+  };
 
-    for (const [bId, list] of Object.entries(get().sessionsByBookId)) {
-      const found = list.find((s) => s.id === sessionId);
-      if (found) {
-        targetBookId = bId;
-        targetSession = found;
-        break;
-      }
-    }
-
-    if (!targetSession || !targetBookId) return false;
-
-    set({ isGeneratingRecap: true, generatingSessionId: sessionId });
-
+  const syncSession = async (sessionId: string): Promise<boolean> => {
+    const session = find(sessionId);
+    if (!session || !isLiveUser()) return false;
     try {
-      // 1. Extract exact text for this session's page range (Req 10)
-      const extraction = await extractPdfTextRange(
-        bookFilePath,
-        targetSession.start_page,
-        targetSession.end_page,
-        { title: bookTitle, author }
-      );
-
-      if (!extraction.success || !extraction.combinedText) {
-        const errorMsg = extraction.error || 'Text extraction failed for this page range.';
-        console.warn('Text extraction did not yield text for recap:', errorMsg);
-        
-        const now = new Date().toISOString();
-        const updatedSession: ReadingSession = {
-          ...targetSession,
-          recap_error: errorMsg,
-          updated_at: now,
-        };
-        const bookList = get().sessionsByBookId[targetBookId] || [];
-        const nextList = bookList.map((s) => (s.id === sessionId ? updatedSession : s));
-        const nextMap = {
-          ...get().sessionsByBookId,
-          [targetBookId]: nextList,
-        };
-
-        set({
-          sessionsByBookId: nextMap,
-          isGeneratingRecap: false,
-          generatingSessionId: null,
-        });
-        saveLocalSessions(nextMap);
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user.id;
+      if (!userId) return false;
+      const { error } = await supabase.from('reading_sessions').upsert(toRemoteRow(session, userId));
+      if (error) {
+        console.warn('Reading session not synced yet (will retry):', error.message);
         return false;
       }
-
-      // 2. Call Gemini Flash API for memory bridge
-      const aiResult = await generateSessionRecap({
-        bookTitle,
-        author,
-        startPage: targetSession.start_page,
-        endPage: targetSession.end_page,
-        sessionText: extraction.combinedText,
-      });
-
-      if (!aiResult.success || !aiResult.recap) {
-        const errorMsg = aiResult.error || 'Unable to generate AI reading recap.';
-        console.warn('Gemini recap generation was unsuccessful:', errorMsg);
-
-        const now = new Date().toISOString();
-        const updatedSession: ReadingSession = {
-          ...targetSession,
-          recap_error: errorMsg,
-          updated_at: now,
-        };
-        const bookList = get().sessionsByBookId[targetBookId] || [];
-        const nextList = bookList.map((s) => (s.id === sessionId ? updatedSession : s));
-        const nextMap = {
-          ...get().sessionsByBookId,
-          [targetBookId]: nextList,
-        };
-
-        set({
-          sessionsByBookId: nextMap,
-          isGeneratingRecap: false,
-          generatingSessionId: null,
-        });
-        saveLocalSessions(nextMap);
-        return false;
-      }
-
-      // 3. Save recap with generation timestamp (Req 17)
-      const now = new Date().toISOString();
-      const updatedSession: ReadingSession = {
-        ...targetSession,
-        recap: aiResult.recap,
-        recap_error: null,
-        recap_generated_at: now,
-        updated_at: now,
-      };
-
-      const bookList = get().sessionsByBookId[targetBookId] || [];
-      const nextList = bookList.map((s) => (s.id === sessionId ? updatedSession : s));
-      const nextMap = {
-        ...get().sessionsByBookId,
-        [targetBookId]: nextList,
-      };
-
-      set({
-        sessionsByBookId: nextMap,
-        isGeneratingRecap: false,
-        generatingSessionId: null,
-      });
-      saveLocalSessions(nextMap);
-
-      if (!isDemoUser()) {
-        try {
-          await supabase.from('reading_sessions').update({
-            recap: aiResult.recap,
-            recap_generated_at: now,
-            updated_at: now,
-          }).eq('id', sessionId);
-        } catch (err) {
-          console.warn('Failed to persist generated recap to Supabase:', err);
-        }
-      }
-
+      patch(sessionId, { sync_pending: false });
       return true;
-    } catch (err: any) {
-      console.error('Unexpected error generating recap:', err);
-      const errorMsg = err?.message || 'Unexpected error occurred during recap generation.';
-      const now = new Date().toISOString();
-      const updatedSession: ReadingSession = {
-        ...targetSession,
-        recap_error: errorMsg,
-        updated_at: now,
-      };
-      const bookList = get().sessionsByBookId[targetBookId] || [];
-      const nextMap = {
-        ...get().sessionsByBookId,
-        [targetBookId]: bookList.map((s) => (s.id === sessionId ? updatedSession : s)),
-      };
-      set({ sessionsByBookId: nextMap, isGeneratingRecap: false, generatingSessionId: null });
-      saveLocalSessions(nextMap);
+    } catch {
       return false;
     }
-  },
+  };
 
-  markRecapViewed: async (sessionId: string) => {
-    let targetBookId = '';
-    let targetSession: ReadingSession | null = null;
+  return {
+    sessionsByBookId: loadLocalSessions(),
+    generatingIds: {},
 
-    for (const [bId, list] of Object.entries(get().sessionsByBookId)) {
-      const found = list.find((s) => s.id === sessionId);
-      if (found) {
-        targetBookId = bId;
-        targetSession = found;
-        break;
-      }
-    }
+    fetchSessions: async (bookId) => {
+      const local = get().sessionsByBookId[bookId] ?? [];
+      if (!isLiveUser()) return local;
 
-    if (!targetSession || !targetBookId) return;
-
-    const now = new Date().toISOString();
-    const updated: ReadingSession = {
-      ...targetSession,
-      recap_viewed_at: now,
-      updated_at: now,
-    };
-
-    const bookList = get().sessionsByBookId[targetBookId] || [];
-    const nextList = bookList.map((s) => (s.id === sessionId ? updated : s));
-    const nextMap = {
-      ...get().sessionsByBookId,
-      [targetBookId]: nextList,
-    };
-
-    set({ sessionsByBookId: nextMap });
-    saveLocalSessions(nextMap);
-
-    if (!isDemoUser()) {
       try {
-        await supabase
+        const { data, error } = await supabase
           .from('reading_sessions')
-          .update({ recap_viewed_at: now, updated_at: now })
+          .select(REMOTE_COLUMNS)
+          .eq('book_id', bookId)
+          .order('ended_at', { ascending: false });
+        if (error || !data) {
+          if (error) console.warn('Could not fetch reading sessions, using local copy:', error.message);
+          return local;
+        }
+
+        const localById = new Map(local.map((s) => [s.id, s]));
+        const serverIds = new Set<string>();
+        const merged: ReadingSession[] = (data as ReadingSession[]).map((row) => {
+          serverIds.add(row.id);
+          const mine = localById.get(row.id);
+          const sameRange = mine && mine.start_page === row.start_page && mine.end_page === row.end_page;
+          return {
+            ...row,
+            // Keep local knowledge the server may not have received yet.
+            recap: row.recap ?? (sameRange ? mine.recap : null),
+            recap_generated_at: row.recap_generated_at ?? (sameRange ? mine.recap_generated_at : null),
+            recap_viewed_at: row.recap_viewed_at ?? mine?.recap_viewed_at ?? null,
+            recap_error: sameRange ? mine.recap_error ?? null : null,
+            recap_error_code: sameRange ? mine.recap_error_code ?? null : null,
+            sync_pending: false,
+          };
+        });
+        const unsynced = local.filter((s) => s.sync_pending && !serverIds.has(s.id));
+        writeList(bookId, [...merged, ...unsynced]);
+        unsynced.forEach((s) => void syncSession(s.id));
+        return get().sessionsByBookId[bookId] ?? [];
+      } catch {
+        return local;
+      }
+    },
+
+    getFrontier: (bookId) => computeFrontier(get().sessionsByBookId[bookId] ?? []),
+
+    saveFinishedSession: (draft) => {
+      const now = new Date().toISOString();
+      const live = isLiveUser();
+      const existing = find(draft.id);
+      const rangeUnchanged = existing && existing.start_page === draft.startPage && existing.end_page === draft.endPage;
+
+      const session: ReadingSession = {
+        id: draft.id,
+        user_id: useAuthStore.getState().user?.id ?? 'demo-artist-01',
+        book_id: draft.bookId,
+        started_at: draft.startedAt,
+        ended_at: draft.endedAt,
+        start_page: draft.startPage,
+        end_page: draft.endPage,
+        duration_seconds: draft.activeSeconds,
+        pages_read: draft.pagesCovered,
+        is_meaningful: draft.isMeaningful,
+        recap: rangeUnchanged ? existing.recap : null,
+        recap_generated_at: rangeUnchanged ? existing.recap_generated_at : null,
+        recap_viewed_at: rangeUnchanged ? existing.recap_viewed_at : null,
+        recap_error: null,
+        recap_error_code: null,
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+        sync_pending: live,
+      };
+
+      const others = (get().sessionsByBookId[draft.bookId] ?? []).filter((s) => s.id !== draft.id);
+      writeList(draft.bookId, [session, ...others]);
+      if (live) void syncSession(session.id);
+      return session;
+    },
+
+    updateSessionBoundaries: async (sessionId, startPage, endPage, maxPage) => {
+      const current = find(sessionId);
+      if (!current) return null;
+      const start = Math.max(1, Math.floor(startPage));
+      const end = Math.min(Math.floor(maxPage), Math.floor(endPage));
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return null;
+      if (start === current.start_page && end === current.end_page) return current;
+
+      const now = new Date().toISOString();
+      const updated = patch(sessionId, {
+        start_page: start,
+        end_page: end,
+        pages_read: end - start + 1,
+        // An explicit correction means the reader wants a recap for these pages.
+        is_meaningful: true,
+        recap: null,
+        recap_generated_at: null,
+        recap_viewed_at: null,
+        recap_error: null,
+        recap_error_code: null,
+        updated_at: now,
+      });
+      if (!updated || !isLiveUser()) return updated;
+
+      if (updated.sync_pending) {
+        await syncSession(sessionId);
+      } else {
+        const { error } = await supabase
+          .from('reading_sessions')
+          .update({
+            start_page: start,
+            end_page: end,
+            pages_read: end - start + 1,
+            is_meaningful: true,
+            recap: null,
+            recap_generated_at: null,
+            recap_viewed_at: null,
+            updated_at: now,
+          })
           .eq('id', sessionId);
-      } catch (err) {
-        console.warn('Failed to mark recap viewed in Supabase:', err);
+        if (error) patch(sessionId, { sync_pending: true });
       }
-    }
-  },
+      return find(sessionId) ?? updated;
+    },
 
-  deleteSession: async (sessionId: string) => {
-    let targetBookId = '';
+    generateRecap: async (sessionId, book, options = {}) => {
+      const session = find(sessionId);
+      if (!session || !session.is_meaningful) return 'skipped';
+      if (session.recap) return 'ready';
+      if (get().generatingIds[sessionId]) return 'skipped';
+      const priorCode = session.recap_error_code as RecapErrorCode | 'extraction_failed' | 'unsupported' | null | undefined;
+      if (!options.force && priorCode && !isTransientRecapError(priorCode as RecapErrorCode)) return 'failed';
 
-    for (const [bId, list] of Object.entries(get().sessionsByBookId)) {
-      if (list.some((s) => s.id === sessionId)) {
-        targetBookId = bId;
-        break;
-      }
-    }
+      const live = isLiveUser();
+      const { start_page, end_page } = session;
+      const stillSameRange = () => {
+        const current = find(sessionId);
+        return Boolean(current && current.start_page === start_page && current.end_page === end_page);
+      };
+      const fail = (code: string, message: string): RecapOutcome => {
+        // Without an account the endpoint can never authorise; don't retry on every open.
+        const effectiveCode = !live && code === 'unauthenticated' ? 'unsupported' : code;
+        if (stillSameRange()) patch(sessionId, { recap_error: message, recap_error_code: effectiveCode });
+        return 'failed';
+      };
 
-    if (!targetBookId) return;
-
-    const bookList = get().sessionsByBookId[targetBookId] || [];
-    const nextList = bookList.filter((s) => s.id !== sessionId);
-    const nextMap = {
-      ...get().sessionsByBookId,
-      [targetBookId]: nextList,
-    };
-
-    set({ sessionsByBookId: nextMap });
-    saveLocalSessions(nextMap);
-
-    if (!isDemoUser()) {
+      setGenerating(sessionId, true);
       try {
-        await supabase.from('reading_sessions').delete().eq('id', sessionId);
+        let accessToken: string | undefined;
+        if (live) {
+          if (session.sync_pending && !(await syncSession(sessionId))) {
+            return fail('network', 'This session has not reached the server yet.');
+          }
+          accessToken = (await supabase.auth.getSession()).data.session?.access_token;
+          if (!accessToken) return fail('unauthenticated', 'Sign in again to see recaps.');
+        }
+
+        const range = recapRangeFor(start_page, end_page);
+        const fileUrl = await getBookSignedUrl(book.filePath);
+        if (!fileUrl) return fail('network', "Couldn't reach this book's file.");
+        let extraction;
+        try {
+          extraction = await extractPdfTextRange(fileUrl, range.startPage, range.endPage);
+        } finally {
+          if (fileUrl.startsWith('blob:') && fileUrl !== book.filePath) URL.revokeObjectURL(fileUrl);
+        }
+        // No text means no recap — never a guess.
+        if (!extraction.success) return fail('extraction_failed', extraction.error ?? 'No readable text on these pages.');
+        if (!stillSameRange()) return 'skipped';
+
+        const result = await requestSessionRecap(
+          {
+            sessionId,
+            bookTitle: book.title,
+            author: book.author,
+            startPage: range.startPage,
+            endPage: range.endPage,
+            pages: extraction.pages,
+          },
+          accessToken
+        );
+        if (!result.success || !result.recap) {
+          return fail(result.code ?? 'unavailable', result.error ?? 'The recap is unavailable right now.');
+        }
+        // The reader may have corrected the pages while this was running.
+        if (!stillSameRange()) return 'skipped';
+
+        const generatedAt = result.generatedAt ?? new Date().toISOString();
+        patch(sessionId, {
+          recap: result.recap,
+          recap_generated_at: generatedAt,
+          recap_error: null,
+          recap_error_code: null,
+          updated_at: generatedAt,
+        });
+        if (live && !result.stored) {
+          await supabase
+            .from('reading_sessions')
+            .update({ recap: result.recap, recap_generated_at: generatedAt, updated_at: generatedAt })
+            .eq('id', sessionId)
+            .eq('start_page', start_page)
+            .eq('end_page', end_page);
+        }
+        return 'ready';
       } catch (err) {
-        console.warn('Failed to delete session in Supabase:', err);
+        console.warn('Recap generation failed:', err);
+        return fail('unavailable', 'The recap is unavailable right now.');
+      } finally {
+        setGenerating(sessionId, false);
       }
-    }
-  },
-}));
+    },
+
+    markRecapViewed: (sessionId) => {
+      const now = new Date().toISOString();
+      const updated = patch(sessionId, { recap_viewed_at: now });
+      if (!updated || !isLiveUser() || updated.sync_pending) return;
+      void supabase
+        .from('reading_sessions')
+        .update({ recap_viewed_at: now })
+        .eq('id', sessionId)
+        .then(({ error }) => {
+          if (error) patch(sessionId, { sync_pending: true });
+        });
+    },
+
+    deleteSession: async (sessionId) => {
+      const current = find(sessionId);
+      if (!current) return;
+      writeList(
+        current.book_id,
+        (get().sessionsByBookId[current.book_id] ?? []).filter((s) => s.id !== sessionId)
+      );
+      if (!isLiveUser()) return;
+      const { error } = await supabase.from('reading_sessions').delete().eq('id', sessionId);
+      if (error) console.warn('Failed to delete reading session remotely:', error.message);
+    },
+  };
+});

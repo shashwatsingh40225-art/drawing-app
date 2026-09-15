@@ -1,12 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 import { useBookStore } from '../stores/bookStore';
 import { useReadingProgressStore } from '../stores/readingProgressStore';
 import { useBookmarkStore } from '../stores/bookmarkStore';
 import { useAnnotationStore } from '../stores/annotationStore';
 import { useToastStore } from '../stores/toastStore';
-import { useReadingSessionStore } from '../stores/readingSessionStore';
+import { useReadingSessionStore, RecapBookSource } from '../stores/readingSessionStore';
 import { getBookSignedUrl } from '../services/bookService';
+import { isTransientRecapError, RecapErrorCode } from '../services/geminiRecapService';
+import { SessionDraft, maxEditablePage, pickBridgeSession } from '../services/readingSessionLogic';
+import { useReadingSessionTracker, SessionCloseReason } from '../hooks/useReadingSessionTracker';
 import { ReaderToolbar } from '../components/reader/ReaderToolbar';
 import { ReaderSidebar } from '../components/reader/ReaderSidebar';
 import { ReaderViewport } from '../components/reader/ReaderViewport';
@@ -15,15 +19,20 @@ import { MemoryBridgeCard } from '../components/reader/MemoryBridgeCard';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ConcentricPortal } from '../components/ConcentricPortal';
 import { KIN_ARCHIVE_BY_ID } from '../data/kinArchive';
-import { ReadingSession } from '../types/book';
+import { Book, ReadingSession } from '../types/book';
+
+const NO_SESSIONS: ReadingSession[] = [];
+
+function recapSource(book: Book): RecapBookSource {
+  return { filePath: book.file_path, title: book.title, author: book.author };
+}
 
 export const ReaderScreen: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const { getBookById, updateBook, fetchBooks } = useBookStore();
-  const { getProgress, fetchProgress, saveProgress } = useReadingProgressStore();
+  const { getProgress, fetchProgress, saveProgress, flushProgress } = useReadingProgressStore();
   const { getBookmarks, fetchBookmarks, addBookmark, removeBookmark, isPageBookmarked } = useBookmarkStore();
   const {
     fetchAnnotations,
@@ -35,32 +44,32 @@ export const ReaderScreen: React.FC = () => {
   } = useAnnotationStore();
   const { showToast } = useToastStore();
 
-  const {
-    sessionsByBookId,
-    isGeneratingRecap,
-    generatingSessionId,
-    fetchSessions,
-    startSession,
-    recordPageActivity,
-    recordUserInteraction,
-    incrementActiveDwellTime,
-    finalizeActiveSession,
-    updateSessionBoundaries,
-    generateRecapForSession,
-    markRecapViewed,
-    deleteSession,
-  } = useReadingSessionStore();
+  const bookSessions = useReadingSessionStore((s) => (id ? s.sessionsByBookId[id] : undefined)) ?? NO_SESSIONS;
+  const generatingIds = useReadingSessionStore((s) => s.generatingIds);
+  const fetchSessions = useReadingSessionStore((s) => s.fetchSessions);
+  const getFrontier = useReadingSessionStore((s) => s.getFrontier);
+  const saveFinishedSession = useReadingSessionStore((s) => s.saveFinishedSession);
+  const updateSessionBoundaries = useReadingSessionStore((s) => s.updateSessionBoundaries);
+  const generateRecap = useReadingSessionStore((s) => s.generateRecap);
+  const markRecapViewed = useReadingSessionStore((s) => s.markRecapViewed);
+  const deleteSession = useReadingSessionStore((s) => s.deleteSession);
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [urlReloadKey, setUrlReloadKey] = useState(0);
+  const [loadingUrl, setLoadingUrl] = useState<boolean>(true);
+  const [docLoaded, setDocLoaded] = useState(false);
+  const [booksFetched, setBooksFetched] = useState(false);
+  const [sessionsReady, setSessionsReady] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [isAddingNote, setIsAddingNote] = useState<boolean>(false);
   const [activeSidebar, setActiveSidebar] = useState<'thumbnails' | 'bookmarks' | 'notes' | 'archive' | 'recap' | null>(null);
-  const [loadingUrl, setLoadingUrl] = useState<boolean>(true);
   const [isQuietReading, setIsQuietReading] = useState<boolean>(false);
   const [isChromeFaded, setIsChromeFaded] = useState<boolean>(false);
+  const [bridgeSessionId, setBridgeSessionId] = useState<string | null>(null);
 
   const checkIsMobile = () =>
     typeof window !== 'undefined' && (window.innerWidth <= 768 || window.innerHeight <= 500);
@@ -78,291 +87,211 @@ export const ReaderScreen: React.FC = () => {
     };
   }, []);
 
-  // Memory Bridge states
-  const [showingMemoryBridge, setShowingMemoryBridge] = useState<boolean>(false);
-  const [activeMemoryBridgeSessionId, setActiveMemoryBridgeSessionId] = useState<string | null>(null);
-
   const book = id ? getBookById(id) : undefined;
   const progress = id ? getProgress(id) : undefined;
   const bookmarks = id ? getBookmarks(id) : [];
   const bookAnnotations = id ? annotations.filter((a) => a.book_id === id) : [];
   const pageAnnotations = id ? getAnnotationsForPage(id, currentPage) : [];
-  const bookSessions = id ? sessionsByBookId[id] || [] : [];
-  const unviewedMeaningfulSession = bookSessions.find((s) => s.is_meaningful && !s.recap_viewed_at);
 
-  // Derive active session directly from store to prevent stale closure / state de-sync
-  const activeMemoryBridgeSession = activeMemoryBridgeSessionId
-    ? bookSessions.find((s) => s.id === activeMemoryBridgeSessionId) || null
-    : null;
+  const userNavigatedRef = useRef(false);
+  const bridgeCheckedForRef = useRef<string | null>(null);
+  const autoRecapAttemptedRef = useRef(new Set<string>());
+  const bridgeSessionIdRef = useRef<string | null>(null);
+  bridgeSessionIdRef.current = bridgeSessionId;
 
-  // Track which sessions had an automatic recap generation attempt to avoid infinite retries
-  const autoGeneratedSessionRef = useRef<Record<string, boolean>>({});
-
-  // 1. Initial data fetch & Memory Bridge discovery
+  // 1. Restore the reading position for this book: ?page= wins, then the saved position.
   useEffect(() => {
-    fetchBooks();
-    if (id) {
-      fetchProgress(id);
-      fetchBookmarks(id);
-      fetchAnnotations(id);
-      fetchSessions(id).then((sessions) => {
-        // Find latest meaningful session that hasn't been viewed yet
-        const sorted = sessions.slice().sort(
-          (a, b) => new Date(b.ended_at).getTime() - new Date(a.ended_at).getTime()
-        );
-        const latestUnviewed = sorted.find((s) => s.is_meaningful && !s.recap_viewed_at);
-        if (latestUnviewed) {
-          const endedAgoMs = Date.now() - new Date(latestUnviewed.ended_at).getTime();
-          // Display recap if session was not just closed this very second (> 20s ago)
-          if (endedAgoMs > 20000) {
-            setActiveMemoryBridgeSessionId(latestUnviewed.id);
-            setShowingMemoryBridge(true);
-          }
-        }
-      });
+    if (!id) return;
+    userNavigatedRef.current = false;
+    const saved = getProgress(id);
+    const pageParam = parseInt(searchParams.get('page') ?? '', 10);
+    if (!isNaN(pageParam) && pageParam >= 1) {
+      setCurrentPage(pageParam);
+    } else {
+      setCurrentPage(saved?.current_page || 1);
     }
-  }, [id, fetchBooks, fetchProgress, fetchBookmarks, fetchAnnotations, fetchSessions]);
+    if (saved?.zoom_level) setZoomScale(saved.zoom_level);
+    const knownTotal = saved?.total_pages || getBookById(id)?.page_count;
+    if (knownTotal) setTotalPages(knownTotal);
+  }, [id, searchParams]);
 
-  // 2. Fetch signed URL or local URL for book's file
+  // 2. Fetch book data. A newer server position is applied only if the reader hasn't moved yet.
   useEffect(() => {
     let active = true;
-    const loadUrl = async () => {
-      if (!book) return;
-      setLoadingUrl(true);
-
-      // If file_path is already a direct path/URL
-      if (
-        book.file_path.startsWith('blob:') ||
-        book.file_path.startsWith('data:') ||
-        book.file_path.startsWith('http') ||
-        book.file_path.startsWith('/')
-      ) {
-        if (active) {
-          setPdfUrl(book.file_path);
-          setLoadingUrl(false);
-        }
-        return;
-      }
-
-      const signed = await getBookSignedUrl(book.file_path);
-      if (active) {
-        setPdfUrl(signed || book.file_path);
-        setLoadingUrl(false);
-      }
-    };
-
-    loadUrl();
+    setBooksFetched(false);
+    setSessionsReady(false);
+    fetchBooks().finally(() => {
+      if (active) setBooksFetched(true);
+    });
+    if (id) {
+      fetchProgress(id).then((serverProgress) => {
+        if (!active || !serverProgress || userNavigatedRef.current || searchParams.get('page')) return;
+        setCurrentPage(serverProgress.current_page);
+      });
+      fetchBookmarks(id);
+      fetchAnnotations(id);
+      fetchSessions(id).finally(() => {
+        if (active) setSessionsReady(true);
+      });
+    }
     return () => {
       active = false;
     };
-  }, [book]);
+  }, [id, fetchBooks, fetchProgress, fetchBookmarks, fetchAnnotations, fetchSessions]);
 
-  // 3. Set initial page from URL query param or saved progress
+  // 3. Resolve the book file. Keyed on the file path, not the book object, so metadata updates
+  //    (e.g. page_count) never reload the document.
+  const filePath = book?.file_path;
   useEffect(() => {
-    const pageParam = searchParams.get('page');
-    if (pageParam) {
-      const p = parseInt(pageParam, 10);
-      if (!isNaN(p) && p >= 1) {
-        setCurrentPage(p);
+    if (!filePath) return;
+    let active = true;
+    let createdUrl: string | null = null;
+    setLoadingUrl(true);
+    setFileError(null);
+    setDocLoaded(false);
+
+    getBookSignedUrl(filePath).then((resolved) => {
+      const isOwnBlob = Boolean(resolved && resolved.startsWith('blob:') && resolved !== filePath);
+      if (!active) {
+        if (isOwnBlob) URL.revokeObjectURL(resolved as string);
         return;
       }
-    }
+      if (isOwnBlob) createdUrl = resolved;
+      if (!resolved) {
+        setFileError("This book's file couldn't be retrieved. Check your connection and try again.");
+      }
+      setPdfUrl(resolved);
+      setLoadingUrl(false);
+    });
 
-    if (progress?.current_page) {
-      setCurrentPage(progress.current_page);
-    }
-    if (progress?.zoom_level) {
-      setZoomScale(progress.zoom_level);
-    }
-    if (progress?.total_pages) {
-      setTotalPages(progress.total_pages);
-    } else if (book?.page_count) {
-      setTotalPages(book.page_count);
-    }
-  }, [searchParams, progress, book]);
+    return () => {
+      active = false;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [filePath, urlReloadKey]);
 
-  // 4. Change page handler with auto-save & session tracking
+  // 4. Reading sessions — inferred automatically while the document is on screen.
+  const handleSessionClosed = useCallback(
+    (draft: SessionDraft, reason: SessionCloseReason) => {
+      const saved = saveFinishedSession(draft);
+      if (!saved.is_meaningful) return;
+
+      if ((reason === 'break' || reason === 'recovered') && draft.bookId === id) {
+        // Returning after a real break: bridge from what was read before it.
+        const pick = pickBridgeSession(useReadingSessionStore.getState().sessionsByBookId[draft.bookId] ?? [], Date.now());
+        if (pick) setBridgeSessionId(pick.id);
+      }
+
+      const sourceBook = getBookById(draft.bookId);
+      if (sourceBook) {
+        autoRecapAttemptedRef.current.add(saved.id);
+        void generateRecap(saved.id, recapSource(sourceBook));
+      }
+    },
+    [id, saveFinishedSession, getBookById, generateRecap]
+  );
+
+  useReadingSessionTracker({
+    bookId: id,
+    currentPage,
+    enabled: Boolean(id && book && docLoaded),
+    getFrontier,
+    onSessionClosed: handleSessionClosed,
+    onHidden: flushProgress,
+  });
+
+  useEffect(() => () => flushProgress(), [id, flushProgress]);
+
+  // 5. "Previously…" — decided once per open, after sessions have loaded.
+  useEffect(() => {
+    if (!id || !sessionsReady || bridgeCheckedForRef.current === id) return;
+    bridgeCheckedForRef.current = id;
+    const pick = pickBridgeSession(useReadingSessionStore.getState().sessionsByBookId[id] ?? [], Date.now());
+    setBridgeSessionId(pick ? pick.id : null);
+  }, [id, sessionsReady]);
+
+  const bridgeSession = bridgeSessionId ? bookSessions.find((s) => s.id === bridgeSessionId) ?? null : null;
+  const bridgeGenerating = bridgeSession ? Boolean(generatingIds[bridgeSession.id]) : false;
+  const bridgePermanentlyUnavailable = Boolean(
+    bridgeSession &&
+      !bridgeSession.recap &&
+      !bridgeGenerating &&
+      bridgeSession.recap_error_code &&
+      !isTransientRecapError(bridgeSession.recap_error_code as RecapErrorCode)
+  );
+  const editableLimit = Math.min(
+    Math.max(totalPages, 1),
+    maxEditablePage(bookSessions, Math.max(progress?.current_page ?? 1, currentPage))
+  );
+
+  // Generate a missing recap for the bridge in the background — never blocks the book.
+  useEffect(() => {
+    if (!bridgeSession || bridgeSession.recap || !book) return;
+    if (autoRecapAttemptedRef.current.has(bridgeSession.id)) return;
+    autoRecapAttemptedRef.current.add(bridgeSession.id);
+    void generateRecap(bridgeSession.id, recapSource(book));
+  }, [bridgeSession?.id, bridgeSession?.recap, book?.id, generateRecap]);
+
+  const closeBridge = useCallback(
+    (reason: 'explicit' | 'page-turn') => {
+      const sessionId = bridgeSessionIdRef.current;
+      if (!sessionId) return;
+      const session = bookSessions.find((s) => s.id === sessionId);
+      // Turning the page while the recap is still loading doesn't count as having seen it.
+      if (reason === 'explicit' || session?.recap) markRecapViewed(sessionId);
+      setBridgeSessionId(null);
+    },
+    [bookSessions, markRecapViewed]
+  );
+
+  // 6. Change page (local save is immediate, the server write is debounced in the store)
   const handlePageChange = useCallback(
     (targetPage: number) => {
       const clamped = Math.max(1, Math.min(totalPages || 1, targetPage));
+      userNavigatedRef.current = true;
       setCurrentPage(clamped);
-
-      // If user turns page while Memory Bridge card is displayed, dismiss and mark viewed
-      if (showingMemoryBridge && activeMemoryBridgeSessionId) {
-        markRecapViewed(activeMemoryBridgeSessionId);
-        setShowingMemoryBridge(false);
-      }
-
+      if (bridgeSessionIdRef.current) closeBridge('page-turn');
       if (id) {
         saveProgress(id, clamped, totalPages, 0, zoomScale);
-        recordPageActivity(clamped, book?.file_path, book?.title, book?.author);
       }
     },
-    [id, totalPages, zoomScale, saveProgress, recordPageActivity, book, showingMemoryBridge, activeMemoryBridgeSessionId, markRecapViewed]
+    [id, totalPages, zoomScale, saveProgress, closeBridge]
   );
-
-  // 4b. Start active session tracking when reader opens
-  useEffect(() => {
-    if (id && currentPage >= 1) {
-      startSession(id, currentPage);
-    }
-  }, [id, currentPage, startSession]);
-
-  // 4c. Track active user interactions and dwell time
-  useEffect(() => {
-    const handleActivity = () => {
-      recordUserInteraction();
-    };
-
-    const events = ['mousemove', 'mousedown', 'scroll', 'touchstart', 'keydown'];
-    events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
-
-    // Increment active reading dwell time every second when visible
-    const timer = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        incrementActiveDwellTime(1);
-      }
-    }, 1000);
-
-    return () => {
-      events.forEach((evt) => window.removeEventListener(evt, handleActivity));
-      clearInterval(timer);
-    };
-  }, [recordUserInteraction, incrementActiveDwellTime]);
-
-  // 4d. Finalize active session on unmount, tab hide, or beforeunload
-  const bookRef = useRef(book);
-  bookRef.current = book;
-
-  useEffect(() => {
-    const flushSession = () => {
-      const currentBook = bookRef.current;
-      if (currentBook) {
-        finalizeActiveSession(currentBook.file_path, currentBook.title, currentBook.author);
-      } else {
-        finalizeActiveSession();
-      }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        flushSession();
-      } else if (document.visibilityState === 'visible') {
-        // Tab restored: ensure reading session continues smoothly
-        if (id && currentPage >= 1) {
-          startSession(id, currentPage);
-        }
-      }
-    };
-
-    const handleBeforeUnload = () => {
-      flushSession();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      flushSession();
-    };
-  }, [id, currentPage, finalizeActiveSession, startSession]);
-
-  // 4e. Generate recap if active memory bridge is pending recap and book is loaded
-  useEffect(() => {
-    if (
-      showingMemoryBridge &&
-      activeMemoryBridgeSession &&
-      !activeMemoryBridgeSession.recap &&
-      !activeMemoryBridgeSession.recap_error &&
-      !isGeneratingRecap &&
-      !autoGeneratedSessionRef.current[activeMemoryBridgeSession.id] &&
-      book
-    ) {
-      autoGeneratedSessionRef.current[activeMemoryBridgeSession.id] = true;
-      generateRecapForSession(
-        activeMemoryBridgeSession.id,
-        book.file_path,
-        book.title,
-        book.author
-      );
-    }
-  }, [showingMemoryBridge, activeMemoryBridgeSession, isGeneratingRecap, book, generateRecapForSession]);
-
-  // 4f. Memory bridge action handlers
-  const handleContinueReading = useCallback(() => {
-    if (activeMemoryBridgeSession) {
-      markRecapViewed(activeMemoryBridgeSession.id);
-      // Navigate to end_page (continuation position) if reader is currently before it
-      if (currentPage < activeMemoryBridgeSession.end_page) {
-        handlePageChange(activeMemoryBridgeSession.end_page);
-      }
-    }
-    setShowingMemoryBridge(false);
-  }, [activeMemoryBridgeSession, currentPage, handlePageChange, markRecapViewed]);
-
-  const handleDismissMemoryBridge = useCallback(() => {
-    if (activeMemoryBridgeSession) {
-      markRecapViewed(activeMemoryBridgeSession.id);
-    }
-    setShowingMemoryBridge(false);
-  }, [activeMemoryBridgeSession, markRecapViewed]);
 
   const handleUpdateBoundaries = useCallback(
-    async (startPage: number, endPage: number) => {
-      if (!activeMemoryBridgeSession || !book) return;
-      // Allow regeneration attempt on boundary change
-      if (autoGeneratedSessionRef.current[activeMemoryBridgeSession.id]) {
-        delete autoGeneratedSessionRef.current[activeMemoryBridgeSession.id];
+    async (sessionId: string, startPage: number, endPage: number): Promise<boolean> => {
+      const updated = await updateSessionBoundaries(sessionId, startPage, endPage, editableLimit);
+      if (!updated) {
+        showToast({ type: 'error', message: `Choose pages between 1 and ${editableLimit}.` });
+        return false;
       }
-      const updated = await updateSessionBoundaries(
-        activeMemoryBridgeSession.id,
-        startPage,
-        endPage,
-        book.file_path,
-        book.title,
-        book.author
-      );
-      if (updated) {
-        showToast({
-          type: 'success',
-          message: `Reading boundaries updated to Pages ${startPage}–${endPage}. Regenerating recap…`,
-        });
+      if (book) {
+        autoRecapAttemptedRef.current.add(updated.id);
+        void generateRecap(updated.id, recapSource(book), { force: true });
       }
+      return true;
     },
-    [activeMemoryBridgeSession, book, updateSessionBoundaries, showToast]
+    [updateSessionBoundaries, editableLimit, book, generateRecap, showToast]
   );
 
-  const handleRegenerateRecap = useCallback(async () => {
-    if (!activeMemoryBridgeSession || !book) return;
-    showToast({ type: 'info', message: 'Generating reading session recap…' });
-    const ok = await generateRecapForSession(
-      activeMemoryBridgeSession.id,
-      book.file_path,
-      book.title,
-      book.author
-    );
-    if (ok) {
-      showToast({ type: 'success', message: 'Reading recap generated!' });
-    } else {
-      const sess = bookSessions.find((s) => s.id === activeMemoryBridgeSession.id);
-      showToast({
-        type: 'error',
-        message: sess?.recap_error || 'Could not generate recap with Gemini. Check API key or network connection.',
-      });
-    }
-  }, [activeMemoryBridgeSession, book, bookSessions, generateRecapForSession, showToast]);
+  const handleRetryRecap = useCallback(
+    (sessionId: string) => {
+      if (book) void generateRecap(sessionId, recapSource(book), { force: true });
+    },
+    [book, generateRecap]
+  );
 
-  // 5. Document load success
+  // 7. Document load success
   const handleDocumentLoadSuccess = (numPages: number) => {
     setTotalPages(numPages);
+    setDocLoaded(true);
+    setCurrentPage((page) => Math.min(page, numPages));
     if (id && (!book?.page_count || book.page_count !== numPages)) {
       updateBook(id, { page_count: numPages });
     }
   };
 
-  // 6. Bookmark toggle
+  // 8. Bookmark toggle
   const handleToggleBookmark = async () => {
     if (!id) return;
     const isBookmarked = isPageBookmarked(id, currentPage);
@@ -378,7 +307,7 @@ export const ReaderScreen: React.FC = () => {
     }
   };
 
-  // 7. Add annotation at coordinates
+  // 9. Add annotation at coordinates
   const handleAddNoteAt = async (x_percent: number, y_percent: number) => {
     if (!id) return;
     setIsAddingNote(false);
@@ -395,7 +324,7 @@ export const ReaderScreen: React.FC = () => {
     }
   };
 
-  // 8. Pin Kin Archive asset to current page
+  // 10. Pin Kin Archive asset to current page
   const handlePinArchiveAsset = async (assetId: string) => {
     if (!id) return;
     const asset = KIN_ARCHIVE_BY_ID[assetId];
@@ -413,7 +342,7 @@ export const ReaderScreen: React.FC = () => {
     }
   };
 
-  // 8. Keyboard shortcuts
+  // 11. Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input
@@ -462,7 +391,10 @@ export const ReaderScreen: React.FC = () => {
           setIsQuietReading((q) => !q);
           break;
         case 'Escape':
-          if (isAddingNote) {
+          if (bridgeSessionIdRef.current) {
+            e.preventDefault();
+            closeBridge('explicit');
+          } else if (isAddingNote) {
             e.preventDefault();
             setIsAddingNote(false);
           } else if (isFocusMode) {
@@ -480,7 +412,7 @@ export const ReaderScreen: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPage, handlePageChange, isFocusMode, isAddingNote, activeSidebar, handleToggleBookmark]);
+  }, [currentPage, handlePageChange, isFocusMode, isAddingNote, activeSidebar, handleToggleBookmark, closeBridge]);
 
   // Chrome fade-on-read inactivity timer (3.5s)
   useEffect(() => {
@@ -505,20 +437,6 @@ export const ReaderScreen: React.FC = () => {
     };
   }, []);
 
-  if (!book && !loadingUrl) {
-    return (
-      <div style={{ padding: '60px 24px', textAlign: 'center' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', color: 'var(--color-primary)' }}>Book not found</h2>
-        <p style={{ color: 'var(--color-text-secondary)', marginBottom: '20px' }}>
-          This document could not be found in your private library.
-        </p>
-        <Link to="/library" className="btn-primary" style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', textDecoration: 'none' }}>
-          Return to Library
-        </Link>
-      </div>
-    );
-  }
-
   const swipeHandlers = useSwipeGesture({
     onSwipeLeft: () => {
       if (zoomScale <= 1.0) {
@@ -532,7 +450,23 @@ export const ReaderScreen: React.FC = () => {
     },
   });
 
+  // All hooks are above this line: the early return below must not change the hook order.
+  if (!book && booksFetched) {
+    return (
+      <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', color: 'var(--color-primary)' }}>Book not found</h2>
+        <p style={{ color: 'var(--color-text-secondary)', marginBottom: '20px' }}>
+          This document could not be found in your private library.
+        </p>
+        <Link to="/library" className="btn-primary" style={{ padding: '10px 20px', borderRadius: 'var(--radius-pill)', textDecoration: 'none' }}>
+          Return to Library
+        </Link>
+      </div>
+    );
+  }
+
   const bookmarked = id ? isPageBookmarked(id, currentPage) : false;
+  const hasUnreadRecap = bookSessions.some((s) => s.is_meaningful && s.recap && !s.recap_viewed_at);
 
   return (
     <div
@@ -561,7 +495,7 @@ export const ReaderScreen: React.FC = () => {
           isBookmarked={bookmarked}
           isFocusMode={isFocusMode}
           isAddingNote={isAddingNote}
-          hasUnreadRecap={Boolean(unviewedMeaningfulSession)}
+          hasUnreadRecap={hasUnreadRecap}
           activeSidebar={activeSidebar}
           onPageChange={handlePageChange}
           onZoomChange={setZoomScale}
@@ -580,40 +514,38 @@ export const ReaderScreen: React.FC = () => {
 
       {/* Reader Main Layout */}
       <div {...swipeHandlers} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {/* Floating Memory Bridge (Previously...) Card */}
-        {showingMemoryBridge && activeMemoryBridgeSession && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '16px',
-              left: '16px',
-              right: activeSidebar && !isMobile ? '336px' : '16px',
-              zIndex: 30,
-              display: 'flex',
-              justifyContent: 'center',
-              pointerEvents: 'none',
-            }}
-          >
-            <div style={{ pointerEvents: 'auto', width: '100%', maxWidth: '720px' }}>
-              <MemoryBridgeCard
-                session={activeMemoryBridgeSession}
-                bookTitle={book?.title || 'Book'}
-                isGenerating={isGeneratingRecap && generatingSessionId === activeMemoryBridgeSession.id}
-                onContinueReading={handleContinueReading}
-                onDismiss={handleDismissMemoryBridge}
-                onUpdateBoundaries={handleUpdateBoundaries}
-                onRegenerateRecap={handleRegenerateRecap}
-                totalPages={totalPages}
-              />
-            </div>
-          </div>
-        )}
-
         {loadingUrl ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
             <ConcentricPortal size={70} />
             <div style={{ fontSize: '0.9rem', color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
               Opening book...
+            </div>
+          </div>
+        ) : fileError ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+            <div
+              role="alert"
+              style={{
+                maxWidth: '420px',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-xl)',
+                padding: '28px 24px',
+                textAlign: 'center',
+                boxShadow: 'var(--shadow-card)',
+              }}
+            >
+              <AlertCircle size={32} color="var(--color-error)" style={{ marginBottom: '10px' }} />
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.95rem', margin: '0 0 18px' }}>{fileError}</p>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setUrlReloadKey((k) => k + 1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', minHeight: '44px', padding: '10px 20px', borderRadius: 'var(--radius-pill)', cursor: 'pointer' }}
+              >
+                <RefreshCw size={15} />
+                <span>Try again</span>
+              </button>
             </div>
           </div>
         ) : (
@@ -634,6 +566,21 @@ export const ReaderScreen: React.FC = () => {
           />
         )}
 
+        {/* "Previously…" memory bridge — floats over the page, never blocks it from loading */}
+        {bridgeSession && !bridgePermanentlyUnavailable && (
+          <MemoryBridgeCard
+            session={bridgeSession}
+            isGenerating={bridgeGenerating}
+            isMobile={isMobile}
+            isFocusMode={isFocusMode}
+            maxEditablePage={editableLimit}
+            sidebarOffset={activeSidebar && !isMobile ? 320 : 0}
+            onClose={() => closeBridge('explicit')}
+            onUpdateBoundaries={(start, end) => handleUpdateBoundaries(bridgeSession.id, start, end)}
+            onRetry={() => handleRetryRecap(bridgeSession.id)}
+          />
+        )}
+
         {/* Sidebar */}
         {activeSidebar && (
           <ReaderSidebar
@@ -643,24 +590,18 @@ export const ReaderScreen: React.FC = () => {
             bookmarks={bookmarks}
             annotations={bookAnnotations}
             sessions={bookSessions}
-            isGeneratingRecap={isGeneratingRecap}
+            generatingSessionIds={generatingIds}
+            maxEditablePage={editableLimit}
             onSelectPage={handlePageChange}
             onRemoveBookmark={(bmId) => removeBookmark(bmId)}
             onDeleteAnnotation={(annId) => deleteAnnotation(annId)}
             onPinArchiveAsset={handlePinArchiveAsset}
             onUpdateSessionBoundaries={async (sessId, sPage, ePage) => {
-              if (book) {
-                await updateSessionBoundaries(sessId, sPage, ePage, book.file_path, book.title, book.author);
-                showToast({ type: 'success', message: `Boundaries updated to Pages ${sPage}–${ePage}` });
+              if (await handleUpdateBoundaries(sessId, sPage, ePage)) {
+                showToast({ type: 'success', message: `Session updated to pages ${sPage}–${Math.min(ePage, editableLimit)}` });
               }
             }}
-            onRegenerateSessionRecap={async (sessId) => {
-              if (book) {
-                const ok = await generateRecapForSession(sessId, book.file_path, book.title, book.author);
-                if (ok) showToast({ type: 'success', message: 'Recap regenerated!' });
-                else showToast({ type: 'error', message: 'Failed to generate recap. Check Gemini key or network.' });
-              }
-            }}
+            onRegenerateSessionRecap={async (sessId) => handleRetryRecap(sessId)}
             onDeleteSession={async (sessId) => {
               await deleteSession(sessId);
               showToast({ type: 'info', message: 'Reading session record deleted' });

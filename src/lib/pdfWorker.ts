@@ -1,15 +1,13 @@
-import * as pdfjsDist from 'pdfjs-dist';
+// Import pdfjs through react-pdf (not 'pdfjs-dist' directly). react-pdf's module
+// initialiser assigns its own default `GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs'`;
+// importing from react-pdf guarantees that default runs *before* the override below.
+// Importing pdfjs-dist directly let the bundler order react-pdf's default last, which
+// broke every PDF with "Setting up fake worker failed".
+import { pdfjs } from 'react-pdf';
 
-// Configure the worker source for pdfjs-dist in browser/Vite
-if (typeof window !== 'undefined') {
-  try {
-    pdfjsDist.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString();
-  } catch (e) {
-    pdfjsDist.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsDist.version}/build/pdf.worker.min.mjs`;
-  }
-}
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
-export const pdfjs = pdfjsDist;
+export { pdfjs };

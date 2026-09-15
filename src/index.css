@@ -1026,3 +1026,39 @@ figcaption {
 
 
 
+
+/* ============================================================
+   Memory Bridge ("Previously…") sheet
+   ============================================================ */
+@keyframes memory-bridge-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes memory-bridge-shimmer {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.memory-bridge-skeleton {
+  height: 12px;
+  margin: 0 0 10px;
+  border-radius: 6px;
+  background: var(--color-border-subtle);
+  animation: memory-bridge-shimmer 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-bridge-card,
+  .memory-bridge-skeleton {
+    animation: none !important;
+  }
+}
+
+/* Keep the sheet above the fixed mobile bottom nav (same breakpoint as .mobile-bottom-nav). */
+@media (max-width: 768px) {
+  .memory-bridge-layer:not(.memory-bridge-layer--focus) {
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: 10px !important;
+  }
+}

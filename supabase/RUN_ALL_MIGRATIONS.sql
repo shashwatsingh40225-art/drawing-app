@@ -486,19 +486,38 @@ CREATE INDEX IF NOT EXISTS idx_reading_sessions_meaningful ON reading_sessions(u
 
 ALTER TABLE reading_sessions ENABLE ROW LEVEL SECURITY;
 
+-- Migration 010: idempotent policies; a session may only reference the user's own book
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'reading_sessions_page_range_check') THEN
+    ALTER TABLE reading_sessions
+      ADD CONSTRAINT reading_sessions_page_range_check CHECK (start_page >= 1 AND end_page >= start_page) NOT VALID;
+  END IF;
+END $$;
+
+DROP POLICY IF EXISTS "Users can view own reading sessions" ON reading_sessions;
 CREATE POLICY "Users can view own reading sessions"
   ON reading_sessions FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own reading sessions" ON reading_sessions;
 CREATE POLICY "Users can insert own reading sessions"
   ON reading_sessions FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (SELECT 1 FROM books b WHERE b.id = book_id AND b.user_id = auth.uid())
+  );
 
+DROP POLICY IF EXISTS "Users can update own reading sessions" ON reading_sessions;
 CREATE POLICY "Users can update own reading sessions"
   ON reading_sessions FOR UPDATE
   USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (SELECT 1 FROM books b WHERE b.id = book_id AND b.user_id = auth.uid())
+  );
 
+DROP POLICY IF EXISTS "Users can delete own reading sessions" ON reading_sessions;
 CREATE POLICY "Users can delete own reading sessions"
   ON reading_sessions FOR DELETE
   USING (auth.uid() = user_id);

@@ -3,6 +3,8 @@ import { supabase, isSupabaseDemoMode } from '../lib/supabase';
 import { ReadingProgress } from '../types/book';
 
 const LOCAL_STORAGE_KEY = 'kin_reading_progress_cache';
+/** Page turns are saved locally at once; the server write waits for the reader to settle. */
+const REMOTE_SAVE_DELAY_MS = 1500;
 
 interface ReadingProgressState {
   progressByBookId: Record<string, ReadingProgress>;
@@ -17,6 +19,8 @@ interface ReadingProgressState {
     zoomLevel?: number,
     readingMode?: 'continuous' | 'paginated'
   ) => Promise<void>;
+  /** Send any pending server writes now (app backgrounded, reader closed). */
+  flushProgress: () => void;
 }
 
 function loadLocalProgress(): Record<string, ReadingProgress> {
@@ -36,6 +40,33 @@ function saveLocalProgress(map: Record<string, ReadingProgress>) {
   }
 }
 
+const pendingRemoteWrites = new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>();
+
+async function upsertRemoteProgress(record: ReadingProgress) {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) return;
+
+    const { error } = await supabase.from('reading_progress').upsert(
+      {
+        user_id: user.id,
+        book_id: record.book_id,
+        current_page: record.current_page,
+        total_pages: record.total_pages ?? undefined,
+        scroll_position: record.scroll_position,
+        zoom_level: record.zoom_level,
+        reading_mode: record.reading_mode,
+        last_read_at: record.last_read_at,
+      },
+      { onConflict: 'user_id,book_id' }
+    );
+    if (error) console.warn('Failed to upsert reading progress in Supabase:', error.message);
+  } catch (err) {
+    console.warn('Failed to upsert reading progress in Supabase:', err);
+  }
+}
+
 export const useReadingProgressStore = create<ReadingProgressState>((set, get) => ({
   progressByBookId: loadLocalProgress(),
   loading: false,
@@ -45,8 +76,8 @@ export const useReadingProgressStore = create<ReadingProgressState>((set, get) =
   },
 
   fetchProgress: async (bookId: string) => {
+    const local = get().progressByBookId[bookId] ?? null;
     if (isSupabaseDemoMode) {
-      const local = get().progressByBookId[bookId] ?? null;
       return local;
     }
 
@@ -59,10 +90,15 @@ export const useReadingProgressStore = create<ReadingProgressState>((set, get) =
 
       if (error) {
         console.warn('Failed to fetch reading progress from Supabase:', error.message);
-        return get().progressByBookId[bookId] ?? null;
+        return local;
       }
 
       if (data) {
+        // Reading done offline (or not yet flushed) is newer than the server copy: keep it.
+        if (local && Date.parse(local.last_read_at) > Date.parse(data.last_read_at)) {
+          void upsertRemoteProgress(local);
+          return local;
+        }
         set((state) => ({
           progressByBookId: {
             ...state.progressByBookId,
@@ -73,9 +109,9 @@ export const useReadingProgressStore = create<ReadingProgressState>((set, get) =
         return data;
       }
 
-      return null;
+      return local;
     } catch {
-      return get().progressByBookId[bookId] ?? null;
+      return local;
     }
   },
 
@@ -104,27 +140,20 @@ export const useReadingProgressStore = create<ReadingProgressState>((set, get) =
 
     if (isSupabaseDemoMode) return;
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    const pending = pendingRemoteWrites.get(bookId);
+    if (pending) clearTimeout(pending.timer);
+    const run = () => {
+      pendingRemoteWrites.delete(bookId);
+      const latest = get().progressByBookId[bookId];
+      if (latest) void upsertRemoteProgress(latest);
+    };
+    pendingRemoteWrites.set(bookId, { timer: setTimeout(run, REMOTE_SAVE_DELAY_MS), run });
+  },
 
-      await supabase
-        .from('reading_progress')
-        .upsert(
-          {
-            user_id: user.id,
-            book_id: bookId,
-            current_page: currentPage,
-            total_pages: totalPages ?? undefined,
-            scroll_position: scrollPosition,
-            zoom_level: zoomLevel,
-            reading_mode: readingMode,
-            last_read_at: now,
-          },
-          { onConflict: 'user_id,book_id' }
-        );
-    } catch (err) {
-      console.warn('Failed to upsert reading progress in Supabase:', err);
+  flushProgress: () => {
+    for (const { timer, run } of Array.from(pendingRemoteWrites.values())) {
+      clearTimeout(timer);
+      run();
     }
   },
 }));
