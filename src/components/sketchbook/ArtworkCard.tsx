@@ -24,7 +24,7 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
     toggleFavorite(artwork.id);
   };
 
-  const displayImage = artwork.thumbnail_path || artwork.image_path || '/artist-reference/art-01.jpeg';
+  const displayImage = artwork.thumbnail_path || artwork.image_path || null;
 
   return (
     <Link

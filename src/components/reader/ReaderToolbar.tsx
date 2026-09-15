@@ -17,6 +17,7 @@ import {
   MoreHorizontal,
   BookOpen,
   X,
+  Sparkles,
 } from 'lucide-react';
 
 interface ReaderToolbarProps {
@@ -28,13 +29,14 @@ interface ReaderToolbarProps {
   isBookmarked: boolean;
   isFocusMode: boolean;
   isAddingNote?: boolean;
-  activeSidebar: 'thumbnails' | 'bookmarks' | 'notes' | 'archive' | null;
+  hasUnreadRecap?: boolean;
+  activeSidebar: 'thumbnails' | 'bookmarks' | 'notes' | 'archive' | 'recap' | null;
   onPageChange: (page: number) => void;
   onZoomChange: (scale: number) => void;
   onToggleBookmark: () => void;
   onToggleAddNote?: () => void;
   onToggleFocusMode: () => void;
-  onToggleSidebar: (sidebar: 'thumbnails' | 'bookmarks' | 'notes' | 'archive') => void;
+  onToggleSidebar: (sidebar: 'thumbnails' | 'bookmarks' | 'notes' | 'archive' | 'recap') => void;
   onFitWidth?: () => void;
   onFitPage?: () => void;
   isQuietReading?: boolean;
@@ -50,6 +52,7 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
   isBookmarked,
   isFocusMode,
   isAddingNote,
+  hasUnreadRecap = false,
   activeSidebar,
   onPageChange,
   onZoomChange,
@@ -63,15 +66,22 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
   onToggleQuietReading,
 }) => {
   const navigate = useNavigate();
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const checkIsMobile = () =>
+    typeof window !== 'undefined' && (window.innerWidth <= 768 || window.innerHeight <= 500);
+
+  const [isMobile, setIsMobile] = useState(checkIsMobile);
   const [overflowOpen, setOverflowOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
+      setIsMobile(checkIsMobile());
     };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
   if (isQuietReading) {
@@ -120,7 +130,9 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              maxWidth: isMobile ? '75px' : '280px',
+              maxWidth: isMobile
+                ? (typeof window !== 'undefined' && window.innerHeight <= 500 ? '160px' : '75px')
+                : '280px',
             }}
             title={bookTitle}
           >
@@ -253,7 +265,9 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            maxWidth: isMobile ? '65px' : (isFocusMode ? '400px' : '280px'),
+            maxWidth: isMobile
+              ? (typeof window !== 'undefined' && window.innerHeight <= 500 ? '160px' : '65px')
+              : (isFocusMode ? '400px' : '280px'),
           }}
           title={bookTitle}
         >
@@ -433,6 +447,9 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
                 flexDirection: 'column',
                 gap: '10px',
                 minWidth: '220px',
+                maxHeight: 'calc(100vh - 60px)',
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
               }}
             >
               {/* Zoom controls */}
@@ -640,6 +657,30 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
                 >
                   <Archive size={15} />
                   <span>Kin Archive</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onToggleSidebar('recap'); setOverflowOpen(false); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: 'none',
+                    background: activeSidebar === 'recap' ? 'rgba(180, 83, 31, 0.12)' : 'transparent',
+                    color: activeSidebar === 'recap' ? 'var(--color-secondary)' : 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    textAlign: 'left',
+                    position: 'relative',
+                  }}
+                >
+                  <Sparkles size={15} color="var(--color-secondary)" />
+                  <span>Previously… (Memory Bridge)</span>
+                  {hasUnreadRecap && (
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--color-secondary)', marginLeft: 'auto' }} />
+                  )}
                 </button>
               </div>
             </div>
@@ -853,6 +894,43 @@ export const ReaderToolbar: React.FC<ReaderToolbarProps> = ({
           >
             <Archive size={14} />
             <span>Archive</span>
+          </button>
+
+          {/* Memory Bridge (Previously...) */}
+          <button
+            type="button"
+            onClick={() => onToggleSidebar('recap')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '5px 12px',
+              borderRadius: 'var(--radius-pill)',
+              border: `1px solid ${activeSidebar === 'recap' ? 'var(--color-secondary)' : 'var(--color-border)'}`,
+              background: activeSidebar === 'recap' ? 'var(--color-secondary)' : 'transparent',
+              color: activeSidebar === 'recap' ? 'var(--color-text-on-dark)' : 'var(--color-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              position: 'relative',
+            }}
+            title="Reading Session Recap / Memory Bridge"
+          >
+            <Sparkles size={14} />
+            <span>Previously…</span>
+            {hasUnreadRecap && (
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: activeSidebar === 'recap' ? '#FFF' : 'var(--color-secondary)',
+                  position: 'absolute',
+                  top: '4px',
+                  right: '6px',
+                }}
+              />
+            )}
           </button>
 
           {/* Focus Mode (Fullscreen) */}

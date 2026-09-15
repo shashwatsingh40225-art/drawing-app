@@ -21,6 +21,7 @@ interface ReaderViewportProps {
   onLoadSuccess: (numPages: number) => void;
   onLoadError?: (error: Error) => void;
   isQuietReading?: boolean;
+  isFocusMode?: boolean;
 }
 
 export const ReaderViewport: React.FC<ReaderViewportProps> = ({
@@ -37,6 +38,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   onLoadSuccess,
   onLoadError,
   isQuietReading = false,
+  isFocusMode = false,
 }) => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -48,6 +50,9 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
     }
     return 360;
   });
+  const [isLandscapePhone, setIsLandscapePhone] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.innerHeight <= 500
+  );
 
   // Measure container width and dynamically recalculate on resize and orientation change
   useEffect(() => {
@@ -55,6 +60,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
     if (!container) return;
 
     const updateWidth = () => {
+      setIsLandscapePhone(typeof window !== 'undefined' && window.innerHeight <= 500);
       const computed = window.getComputedStyle(container);
       const padLeft = parseFloat(computed.paddingLeft) || 0;
       const padRight = parseFloat(computed.paddingRight) || 0;
@@ -109,6 +115,10 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   const effectivePageWidth = Math.round(baseFitWidth * zoomScale);
   const isOverflowing = effectivePageWidth > containerWidth;
 
+  const isCompactVertical = isFocusMode || isLandscapePhone;
+  const bottomPadding = isCompactVertical ? '16px' : '80px';
+  const topPadding = isLandscapePhone ? '12px' : '24px';
+
   return (
     <div
       ref={containerRef}
@@ -123,7 +133,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
         flexDirection: 'column',
         alignItems: isOverflowing ? 'flex-start' : 'center',
         justifyContent: 'flex-start',
-        padding: '24px 16px 80px 16px',
+        padding: `${topPadding} 16px ${bottomPadding} 16px`,
         backgroundColor: 'var(--color-background)',
         WebkitOverflowScrolling: 'touch',
         boxSizing: 'border-box',

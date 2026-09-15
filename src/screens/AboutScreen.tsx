@@ -62,7 +62,7 @@ export const AboutScreen: React.FC = () => {
               src="/artist-reference/art-04.jpeg" 
               alt="ART-04: Lemur-headed figure in Victorian gown holding a teacup"
               className="artwork-img-blend"
-              style={{ maxHeight: '560px', width: 'auto' }}
+              style={{ maxHeight: '560px', maxWidth: '100%', width: 'auto' }}
             />
           </div>
           <figcaption 
@@ -73,6 +73,8 @@ export const AboutScreen: React.FC = () => {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'baseline',
+              flexWrap: 'wrap',
+              gap: '6px 12px',
               fontSize: '0.82rem',
               color: 'var(--color-text-secondary)',
             }}
@@ -159,7 +161,7 @@ export const AboutScreen: React.FC = () => {
               src="/artist-reference/art-19.jpeg" 
               alt="ART-19: Beaked figure with afro and swirling smoke lines"
               className="artwork-img-blend"
-              style={{ maxHeight: '480px', width: 'auto' }}
+              style={{ maxHeight: '480px', maxWidth: '100%', width: 'auto' }}
             />
           </div>
           <figcaption 
@@ -170,6 +172,8 @@ export const AboutScreen: React.FC = () => {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'baseline',
+              flexWrap: 'wrap',
+              gap: '6px 12px',
               fontSize: '0.82rem',
               color: 'var(--color-text-secondary)',
             }}
@@ -221,7 +225,7 @@ export const AboutScreen: React.FC = () => {
               src="/artist-reference/art-20.jpeg" 
               alt="ART-20: Bird of dense layered feathers in monochrome ink wash"
               className="artwork-img-blend"
-              style={{ maxHeight: '580px', width: 'auto' }}
+              style={{ maxHeight: '580px', maxWidth: '100%', width: 'auto' }}
             />
           </div>
           <figcaption 
@@ -232,6 +236,8 @@ export const AboutScreen: React.FC = () => {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'baseline',
+              flexWrap: 'wrap',
+              gap: '6px 12px',
               fontSize: '0.82rem',
               color: 'var(--color-text-secondary)',
             }}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { EyeMark } from '../components/EyeMark';
 import { useAuthStore } from '../stores/authStore';
 import { ArrowRight } from 'lucide-react';
@@ -12,6 +12,8 @@ export const SignUpScreen: React.FC = () => {
 
   const { signUp, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnUrl = (location.state as { from?: string } | null)?.from || '/my-art';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +35,7 @@ export const SignUpScreen: React.FC = () => {
 
     const res = await signUp(email, password);
     if (!res.error) {
-      navigate('/my-art');
+      navigate(returnUrl, { replace: true });
     }
   };
 
@@ -255,6 +257,7 @@ export const SignUpScreen: React.FC = () => {
           Already have an account?{' '}
           <Link
             to="/login"
+            state={location.state}
             style={{
               color: 'var(--color-accent)',
               fontWeight: 600,

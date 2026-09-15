@@ -117,6 +117,10 @@ button {
   outline: none;
 }
 
+figcaption {
+  flex-wrap: wrap;
+}
+
 /* Ruled Notebook Paper Texture */
 .ruled-paper-pattern {
   background-color: var(--color-surface);
@@ -437,7 +441,7 @@ button {
    ======================================== */
 
 .mobile-menu-btn {
-  display: none;
+  display: none !important;
 }
 
 @media (max-width: 768px) {
@@ -446,7 +450,12 @@ button {
     display: none !important;
   }
   .mobile-menu-btn {
-    display: block !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
   }
   .nav-links {
     gap: 8px;
@@ -478,6 +487,13 @@ button {
   .upload-form-container {
     grid-template-columns: 1fr !important;
   }
+
+  /* Form ergonomics: prevent iOS Safari auto-zoom trap on focus */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -502,6 +518,18 @@ button {
   }
   .archive-lightbox-img-mat {
     padding: 6px !important;
+  }
+  
+  /* Responsive section spacing for narrow mobile viewports (<= 360px) */
+  .home-hero-section {
+    padding: 36px 16px 48px !important;
+    gap: 32px !important;
+  }
+  .home-feature-section {
+    padding: 24px 16px 48px !important;
+  }
+  .home-authenticated-container {
+    padding: 24px 16px 64px 16px !important;
   }
 }
 
@@ -631,19 +659,95 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 12px;
-  font-size: 0.68rem;
+  gap: 3px;
+  padding: 6px 16px;
+  font-size: 0.72rem;
   font-weight: 500;
   color: var(--color-text-muted);
   text-decoration: none;
-  transition: color var(--transition-fast);
+  transition: all var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
+  flex: 1;
 }
 
 .mobile-bottom-nav-item.active {
-  color: var(--color-primary);
+  color: var(--color-accent);
+  font-weight: 700;
 }
+
+/* Desktop navigation item hover effect */
+.desktop-nav-item:hover:not(.active) {
+  color: var(--color-primary) !important;
+  background-color: rgba(58, 33, 64, 0.04) !important;
+}
+
+/* Tactile Sub-Navigation Bar for Art Section (My Art <-> Kin Archive) */
+.art-subnav-bar {
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+  box-shadow: 0 2px 8px rgba(36, 19, 41, 0.03);
+  position: relative;
+  z-index: 40;
+}
+
+.tactile-subnav-group {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(58, 33, 64, 0.05);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  gap: 4px;
+  position: relative;
+}
+
+.tactile-subnav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1.5px solid transparent;
+  transition: all 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tactile-subnav-pill:hover:not(.active) {
+  color: var(--color-text-primary);
+  background: rgba(58, 33, 64, 0.04);
+}
+
+.tactile-subnav-pill.active {
+  color: var(--color-primary);
+  background: var(--color-surface);
+  border-color: var(--color-accent);
+  font-weight: 700;
+  box-shadow: 2px 2px 0 0 var(--color-accent), 0 2px 6px rgba(36, 19, 41, 0.08);
+  transform: translateY(-1px);
+}
+
+.tactile-subnav-pill:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+@media (max-width: 480px) {
+  .art-subnav-bar {
+    padding: 6px 12px !important;
+  }
+  .tactile-subnav-pill {
+    padding: 5px 12px;
+    font-size: 0.8rem;
+    gap: 5px;
+  }
+}
+
 
 /* Reading progress indicator */
 .reading-progress-bar {

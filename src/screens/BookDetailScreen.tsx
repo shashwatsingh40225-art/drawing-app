@@ -11,12 +11,10 @@ import {
   Check,
   X,
   HardDrive,
-  LayoutGrid,
 } from 'lucide-react';
 import { useBookStore } from '../stores/bookStore';
 import { useReadingProgressStore } from '../stores/readingProgressStore';
 import { useBookmarkStore } from '../stores/bookmarkStore';
-import { useArtRoomStore } from '../stores/artRoomStore';
 import { useToastStore } from '../stores/toastStore';
 import { Badge } from '../components/ui/Badge';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -30,7 +28,6 @@ export const BookDetailScreen: React.FC = () => {
   const { getProgress, fetchProgress } = useReadingProgressStore();
   const { getBookmarks, fetchBookmarks } = useBookmarkStore();
   const { showToast } = useToastStore();
-  const { addItem: addArtRoomItem } = useArtRoomStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -102,30 +99,6 @@ export const BookDetailScreen: React.FC = () => {
     await softDeleteBook(book.id);
     showToast({ type: 'info', message: `"${book.title}" removed from library` });
     navigate('/library');
-  };
-
-  const handlePinToArtRoom = async () => {
-    await addArtRoomItem({
-      type: 'book_page',
-      ref_book_id: book.id,
-      ref_book_page: currentPage,
-      title: `${book.title} (p. ${currentPage})`,
-      thumbnail_url: coverUrl || undefined,
-      x_percent: 42 + Math.floor(Math.random() * 8),
-      y_percent: 38 + Math.floor(Math.random() * 8),
-      width_percent: 24,
-      height_percent: 28,
-      rotation_degrees: Math.floor(Math.random() * 7) - 3,
-      z_index: 1,
-    });
-    showToast({
-      type: 'success',
-      message: `"${book.title}" pinned to Art Room!`,
-      action: {
-        label: 'Open Art Room',
-        onClick: () => navigate('/art-room'),
-      },
-    });
   };
 
   const coverUrl = book.cover_thumbnail_path || book.cover_image_path;
@@ -238,31 +211,6 @@ export const BookDetailScreen: React.FC = () => {
                 <BookOpen size={18} />
                 <span>{progress && progress.current_page > 1 ? 'Resume Reading' : 'Open in Reader'}</span>
               </Link>
-
-              <button
-                type="button"
-                onClick={handlePinToArtRoom}
-                className="double-outline-btn"
-                style={{
-                  width: '100%',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '10px 18px',
-                  borderRadius: 'var(--radius-pill)',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'var(--color-surface)',
-                  color: 'var(--color-text-primary)',
-                  cursor: 'pointer',
-                  marginBottom: '10px',
-                }}
-              >
-                <LayoutGrid size={15} color="var(--color-accent)" />
-                <span>Pin to Art Room</span>
-              </button>
 
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button

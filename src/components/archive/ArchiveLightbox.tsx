@@ -1,19 +1,17 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, LayoutGrid } from 'lucide-react';
+import { X } from 'lucide-react';
 import { KinArchiveAsset } from '../../types/archive';
 import { worlds } from '../../styles/tokens';
 
 interface ArchiveLightboxProps {
   asset: KinArchiveAsset;
   onClose: () => void;
-  onPinToArtRoom: (asset: KinArchiveAsset) => void;
 }
 
 export const ArchiveLightbox: React.FC<ArchiveLightboxProps> = ({
   asset,
   onClose,
-  onPinToArtRoom,
 }) => {
   const world = worlds.magentaCreature;
 
@@ -142,24 +140,6 @@ export const ArchiveLightbox: React.FC<ArchiveLightboxProps> = ({
             ))}
           </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              className="btn-accent double-outline-btn"
-              style={{
-                padding: '10px 20px',
-                fontSize: '0.88rem',
-                backgroundColor: world.accent,
-                borderColor: world.accent,
-                borderRadius: 'var(--radius-pill)',
-                cursor: 'pointer',
-              }}
-              onClick={() => onPinToArtRoom(asset)}
-            >
-              <LayoutGrid size={15} />
-              <span>Pin to Art Room</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>

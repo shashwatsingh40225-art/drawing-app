@@ -175,7 +175,7 @@ export const ArtworkEditScreen: React.FC = () => {
     }
   };
 
-  const displayImage = artwork.thumbnail_path || artwork.image_path || '/artist-reference/art-01.jpeg';
+  const displayImage = artwork.thumbnail_path || artwork.image_path || null;
 
   return (
     <div
@@ -492,6 +492,11 @@ export const ArtworkEditScreen: React.FC = () => {
                     fontSize: '0.88rem',
                     fontWeight: 600,
                     cursor: 'pointer',
+                    minHeight: '44px',
+                    minWidth: '44px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
                   Add
@@ -539,7 +544,8 @@ export const ArtworkEditScreen: React.FC = () => {
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '6px',
-                          padding: '6px 12px',
+                          padding: '10px 16px',
+                          minHeight: '44px',
                           borderRadius: 'var(--radius-pill)',
                           border: selected
                             ? '1px solid var(--color-accent)'

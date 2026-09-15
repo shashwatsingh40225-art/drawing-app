@@ -19,18 +19,36 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isShuffling, setIsShuffling] = React.useState(false);
+  const timerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
 
   const world = worlds.inkStudy;
   const coverUrl = book.cover_thumbnail_path || book.cover_image_path;
 
   const handleRead = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
     e.preventDefault();
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(8);
+    }
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       navigate(`/reader/${book.id}`);
       return;
     }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
     setIsShuffling(true);
-    setTimeout(() => {
+    timerRef.current = window.setTimeout(() => {
       navigate(`/reader/${book.id}`);
     }, motionTiming.microInteraction.durationMs);
   };
@@ -219,7 +237,8 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
               }}
             >
               <Link
-                to={`/library/${book.id}`}
+                to={`/reader/${book.id}`}
+                onClick={handleRead}
                 style={{
                   color: 'inherit',
                   textDecoration: 'none',
@@ -347,8 +366,8 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
 
         {/* CTA */}
         <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-          <button
-            type="button"
+          <Link
+            to={`/reader/${book.id}`}
             onClick={handleRead}
             className="btn-primary"
             style={{
@@ -360,11 +379,11 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
               padding: '8px 14px',
               fontSize: '0.82rem',
               fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
+              textDecoration: 'none',
               borderRadius: 'var(--radius-pill)',
               backgroundColor: world.accent,
               color: '#FFFFFF',
+              boxSizing: 'border-box',
               transition: 'background-color 150ms ease, transform 150ms ease',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = world.secondaryAccent)}
@@ -372,7 +391,7 @@ export const BookCard: React.FC<BookCardProps> = ({ book, onDelete }) => {
           >
             <BookOpen size={14} />
             <span>Read</span>
-          </button>
+          </Link>
           <Link
             to={`/library/${book.id}`}
             style={{

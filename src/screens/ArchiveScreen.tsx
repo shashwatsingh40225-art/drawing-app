@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Archive, LayoutGrid, Sparkles, Filter } from 'lucide-react';
+import { Archive, Filter, Sparkles } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ArtworkMat } from '../components/ui/ArtworkMat';
 import { Badge } from '../components/ui/Badge';
 import { KIN_ARCHIVE_ASSETS } from '../data/kinArchive';
 import { KinArchiveAsset } from '../types/archive';
-import { useArtRoomStore } from '../stores/artRoomStore';
-import { useToastStore } from '../stores/toastStore';
 import { PageTransition } from '../components/motion/PageTransition';
 import { PigmentBloom } from '../components/motion/PigmentBloom';
 import { ArchiveLightbox } from '../components/archive/ArchiveLightbox';
@@ -26,10 +23,6 @@ export const ArchiveScreen: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [bloomingItemId, setBloomingItemId] = useState<string | null>(null);
 
-  const { addItem: addArtRoomItem } = useArtRoomStore();
-  const { showToast } = useToastStore();
-  const navigate = useNavigate();
-
   const world = worlds.magentaCreature;
 
   const handleSelectCard = (item: KinArchiveAsset) => {
@@ -42,31 +35,6 @@ export const ArchiveScreen: React.FC = () => {
       setSelectedItem(item);
       setBloomingItemId(null);
     }, 180);
-  };
-
-  const handlePinToArtRoom = async (item: KinArchiveAsset) => {
-    await addArtRoomItem({
-      type: 'archive_ref',
-      ref_archive_asset_id: item.id,
-      title: item.title,
-      thumbnail_url: item.filename,
-      x_percent: 38 + Math.floor(Math.random() * 8),
-      y_percent: 35 + Math.floor(Math.random() * 8),
-      width_percent: 24,
-      height_percent: 28,
-      rotation_degrees: Math.floor(Math.random() * 7) - 3,
-      z_index: 1,
-    });
-
-    showToast({
-      type: 'success',
-      message: `"${item.title}" pinned to Art Room!`,
-      action: {
-        label: 'Open Art Room',
-        onClick: () => navigate('/art-room'),
-      },
-    });
-    setSelectedItem(null);
   };
 
   const filteredAssets = KIN_ARCHIVE_ASSETS.filter((item) => {
@@ -137,7 +105,7 @@ export const ArchiveScreen: React.FC = () => {
             icon={<Archive size={16} />}
             eyebrowLabel="Kin Archive — Studio Collection"
             title="Kin Archive"
-            description="Twenty first-party artworks bundled with Kin Studio. Browse, explore, and reference them in your reader and art room."
+            description="Twenty first-party artworks bundled with Kin Studio. Browse, explore, and reference them for your artistic practice."
           />
         </div>
 
@@ -233,7 +201,7 @@ export const ArchiveScreen: React.FC = () => {
           >
             <Sparkles size={14} color={world.accent} />
             <span>
-              <strong>Bundled first-party artworks</strong> created for Kin Studio — explore, view details, or pin directly to your Art Room.
+              <strong>Bundled first-party artworks</strong> created for Kin Studio — explore, view details, and study them for your own drawing practice.
             </span>
           </div>
         </div>
@@ -333,7 +301,6 @@ export const ArchiveScreen: React.FC = () => {
           <ArchiveLightbox
             asset={selectedItem}
             onClose={() => setSelectedItem(null)}
-            onPinToArtRoom={handlePinToArtRoom}
           />
         )}
       </div>

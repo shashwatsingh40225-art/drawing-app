@@ -67,7 +67,7 @@ export const Badge: React.FC<BadgeProps> = ({
         display: 'inline-flex',
         alignItems: 'center',
         gap: '5px',
-        padding: '3px 9px',
+        padding: onRemove ? '4px 4px 4px 10px' : '3px 9px',
         borderRadius: 'var(--radius-pill)',
         fontSize: '0.76rem',
         fontWeight: 600,
@@ -87,21 +87,27 @@ export const Badge: React.FC<BadgeProps> = ({
             e.stopPropagation();
             onRemove();
           }}
+          className="badge-remove-btn"
           style={{
             background: 'none',
             border: 'none',
             color: 'inherit',
             cursor: 'pointer',
-            padding: '0 2px',
+            padding: '0',
             marginLeft: '2px',
-            fontSize: '0.85rem',
+            minWidth: '44px',
+            minHeight: '44px',
+            fontSize: '1rem',
             lineHeight: 1,
             display: 'inline-flex',
             alignItems: 'center',
+            justifyContent: 'center',
+            margin: '-12px -8px -12px 0',
+            touchAction: 'manipulation',
           }}
           aria-label={`Remove ${label}`}
         >
-          ×
+          <span aria-hidden="true">×</span>
         </button>
       )}
     </span>

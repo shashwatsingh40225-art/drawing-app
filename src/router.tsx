@@ -1,5 +1,19 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams, useLocation } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
+
+function LegacySketchbookRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  const target = id ? `/my-art/${id}` : '/my-art';
+  return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
+}
+
+function LegacySketchbookEditRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  const target = id ? `/my-art/${id}/edit` : '/my-art';
+  return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
+}
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomeScreen } from './screens/HomeScreen';
 import { AboutScreen } from './screens/AboutScreen';
@@ -13,7 +27,6 @@ import { LibraryScreen } from './screens/LibraryScreen';
 import { BookDetailScreen } from './screens/BookDetailScreen';
 import { ReaderScreen } from './screens/ReaderScreen';
 import { ArchiveScreen } from './screens/ArchiveScreen';
-import { ArtRoomScreen } from './screens/ArtRoomScreen';
 
 export const router = createBrowserRouter([
   {
@@ -46,10 +59,10 @@ export const router = createBrowserRouter([
       { path: 'my-art', element: <SketchbookScreen /> },
       { path: 'my-art/:id', element: <PersonalArtworkDetailScreen /> },
       { path: 'my-art/:id/edit', element: <ArtworkEditScreen /> },
-      // Redirect old /sketchbook paths to /my-art
-      { path: 'sketchbook', element: <Navigate to="/my-art" replace /> },
-      { path: 'sketchbook/:id', element: <Navigate to="/my-art" replace /> },
-      { path: 'sketchbook/:id/edit', element: <Navigate to="/my-art" replace /> },
+      // Redirect old /sketchbook paths to /my-art preserving IDs, query parameters, and hash
+      { path: 'sketchbook', element: <LegacySketchbookRedirect /> },
+      { path: 'sketchbook/:id', element: <LegacySketchbookRedirect /> },
+      { path: 'sketchbook/:id/edit', element: <LegacySketchbookEditRedirect /> },
       // Upload
       { path: 'upload', element: <UploadScreen /> },
       // My Library (PDF books)
@@ -59,8 +72,9 @@ export const router = createBrowserRouter([
       { path: 'reader/:id', element: <ReaderScreen /> },
       // Kin Archive
       { path: 'archive', element: <ArchiveScreen /> },
-      // My Art Room
-      { path: 'art-room', element: <ArtRoomScreen /> },
+      // Redirect old /art-room routes to /
+      { path: 'art-room', element: <Navigate to="/" replace /> },
+      { path: 'art-room/*', element: <Navigate to="/" replace /> },
       // Redirect old /discover routes away
       { path: 'discover', element: <Navigate to="/" replace /> },
       { path: 'discover/*', element: <Navigate to="/" replace /> },

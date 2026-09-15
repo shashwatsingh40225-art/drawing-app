@@ -134,7 +134,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return (
       <PageTransition>
         <div style={{ backgroundColor: world.bg, minHeight: '100vh', transition: 'background-color 300ms ease' }}>
-          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
+          <div className="home-authenticated-container" style={{ maxWidth: '1280px', margin: '0 auto', padding: '36px 24px 96px 24px' }}>
             {/* Studio Dashboard Header */}
             <PageHeader
               icon={<Palette size={16} />}
@@ -552,12 +552,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <div style={{ backgroundColor: world.bg, paddingBottom: '80px', transition: 'background-color 300ms ease' }}>
         {/* Hero Section */}
         <section 
+          className="home-hero-section"
           style={{
             maxWidth: '1280px',
             margin: '0 auto',
             padding: '48px 24px 64px',
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
             alignItems: 'center',
             gap: '48px',
             position: 'relative',
@@ -724,6 +725,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 className="artwork-img-blend"
                 style={{
                   maxHeight: '420px',
+                  maxWidth: '100%',
                   width: 'auto',
                   objectFit: 'contain',
                 }}
@@ -736,6 +738,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
                 marginTop: '16px',
                 paddingTop: '12px',
                 borderTop: '1px solid var(--color-border-subtle)',
@@ -762,6 +766,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* Feature Highlights Section */}
       <section 
+        className="home-feature-section"
         style={{
           maxWidth: '1280px',
           margin: '0 auto',
@@ -774,7 +779,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             Kin is a quiet companion for the working artist — no social features, no algorithms, no ads.
           </p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '24px' }}>
           <Link to="/my-art" style={{ textDecoration: 'none', color: 'inherit' }}>
             <div
               className="quick-access-card"
@@ -829,7 +834,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <Archive size={28} color={world.accent} />
               </div>
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px', color: world.textPrimary }}>Kin Archive</h3>
-              <p style={{ fontSize: '0.88rem', lineHeight: 1.6, color: world.textSecondary, margin: 0 }}>Twenty first-party artworks bundled with Kin Studio — ink studies, creatures, and investigations. Reference them while reading or pin them to your Art Room board.</p>
+              <p style={{ fontSize: '0.88rem', lineHeight: 1.6, color: world.textSecondary, margin: 0 }}>Twenty first-party artworks bundled with Kin Studio — ink studies, creatures, and investigations. Reference them while reading or explore them for creative inspiration.</p>
             </div>
           </Link>
         </div>

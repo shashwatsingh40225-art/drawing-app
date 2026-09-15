@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useArtworkStore } from '../stores/artworkStore';
 import { useCollectionStore } from '../stores/collectionStore';
-import { useArtRoomStore } from '../stores/artRoomStore';
 import { useToastStore } from '../stores/toastStore';
 import { getImageUrl } from '../services/imageService';
 import { ArtworkMat } from '../components/ui/ArtworkMat';
@@ -18,8 +17,7 @@ import {
   Calendar, 
   Folder, 
   FileText,
-  Tag as TagIcon,
-  LayoutGrid
+  Tag as TagIcon
 } from 'lucide-react';
 
 export const PersonalArtworkDetailScreen: React.FC = () => {
@@ -29,7 +27,6 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
   const { artworks, toggleFavorite, softDeleteArtwork, restoreArtwork, fetchArtworks } = useArtworkStore();
   const { collections, fetchCollections } = useCollectionStore();
   const { showToast } = useToastStore();
-  const { addItem: addArtRoomItem } = useArtRoomStore();
 
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -68,7 +65,7 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
     artwork.collection_ids?.includes(c.id)
   );
 
-  const displayImage = fullImageUrl || artwork.thumbnail_path || artwork.image_path || '/artist-reference/art-01.jpeg';
+  const displayImage = fullImageUrl || artwork.thumbnail_path || artwork.image_path || null;
 
   const handleDelete = async () => {
     setShowDeleteConfirm(false);
@@ -85,31 +82,6 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
           await restoreArtwork(artwork.id);
           showToast({ type: 'success', message: `"${artwork.title}" restored.` });
         },
-      },
-    });
-  };
-
-  const handleSendToArtRoom = async () => {
-    if (!artwork) return;
-    await addArtRoomItem({
-      type: 'artwork',
-      ref_artwork_id: artwork.id,
-      title: artwork.title,
-      thumbnail_url: displayImage,
-      x_percent: 40 + Math.floor(Math.random() * 8),
-      y_percent: 35 + Math.floor(Math.random() * 8),
-      width_percent: 25,
-      height_percent: 30,
-      rotation_degrees: Math.floor(Math.random() * 7) - 3,
-      z_index: 1,
-    });
-
-    showToast({
-      type: 'success',
-      message: `"${artwork.title}" pinned to Art Room!`,
-      action: {
-        label: 'Open Art Room',
-        onClick: () => navigate('/art-room'),
       },
     });
   };
@@ -425,27 +397,6 @@ export const PersonalArtworkDetailScreen: React.FC = () => {
               <Edit3 size={15} />
               <span>Edit Details</span>
             </Link>
-
-            <button
-              onClick={handleSendToArtRoom}
-              className="double-outline-btn"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 18px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-surface)',
-                color: 'var(--color-text-primary)',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <LayoutGrid size={15} color="var(--color-accent)" />
-              <span>Pin to Art Room</span>
-            </button>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}

@@ -14,6 +14,7 @@ import { ConcentricPortal } from '../components/ConcentricPortal';
 import { 
   UploadCloud, 
   Image as ImageIcon, 
+  Camera,
   X, 
   Check, 
   ArrowLeft, 
@@ -21,7 +22,7 @@ import {
   FileText
 } from 'lucide-react';
 
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/jpg'];
+const ACCEPTED_TYPES = ['image/*', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/jpg'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const MEDIUM_OPTIONS = [
@@ -56,6 +57,7 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
   const { showToast } = useToastStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Upload & File State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -78,7 +80,8 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
   const handleValidateAndSetFile = (file: File) => {
     setFileError(null);
 
-    if (!ACCEPTED_TYPES.includes(file.type) && !file.name.match(/\.(jpe?g|png|webp|heic)$/i)) {
+    const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name);
+    if (!isImage) {
       setFileError('Supported formats: JPEG, PNG, WebP, HEIC.');
       return;
     }
@@ -277,7 +280,16 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
           <input
             ref={fileInputRef}
             type="file"
-            accept={ACCEPTED_TYPES.join(',')}
+            accept="image/*,.jpeg,.jpg,.png,.webp,.heic,image/heic,image/heif"
+            onChange={handleFileInputChange}
+            style={{ display: 'none' }}
+          />
+
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
             onChange={handleFileInputChange}
             style={{ display: 'none' }}
           />
@@ -321,20 +333,57 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
             Supports JPEG, PNG, WebP, or HEIC up to 10MB.
           </p>
 
-          <button
-            type="button"
-            className="btn-primary double-outline-btn"
+          <div
             style={{
-              padding: '10px 24px',
-              fontSize: '0.92rem',
-              display: 'inline-flex',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '12px',
+              justifyContent: 'center',
               alignItems: 'center',
-              gap: '8px',
             }}
           >
-            <ImageIcon size={16} />
-            <span>Select Image File</span>
-          </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              className="btn-primary double-outline-btn"
+              style={{
+                padding: '10px 24px',
+                fontSize: '0.92rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                minHeight: '44px',
+              }}
+            >
+              <ImageIcon size={18} />
+              <span>Select Image File</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                cameraInputRef.current?.click();
+              }}
+              className="btn-secondary double-outline-btn"
+              style={{
+                padding: '10px 24px',
+                fontSize: '0.92rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                minHeight: '44px',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface)',
+              }}
+            >
+              <Camera size={18} />
+              <span>Take Photo of Sketch</span>
+            </button>
+          </div>
 
           {fileError && (
             <div
@@ -674,6 +723,11 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
                       fontSize: '0.88rem',
                       fontWeight: 600,
                       cursor: 'pointer',
+                      minHeight: '44px',
+                      minWidth: '44px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
                     Add
@@ -721,7 +775,8 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
-                            padding: '6px 12px',
+                            padding: '10px 16px',
+                            minHeight: '44px',
                             borderRadius: 'var(--radius-pill)',
                             border: selected
                               ? '1px solid var(--color-accent)'

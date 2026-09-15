@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { EyeMark } from '../components/EyeMark';
 import { useAuthStore } from '../stores/authStore';
 import { isSupabaseDemoMode } from '../lib/supabase';
@@ -12,6 +12,8 @@ export const LoginScreen: React.FC = () => {
 
   const { signIn, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnUrl = (location.state as { from?: string } | null)?.from || '/my-art';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +31,7 @@ export const LoginScreen: React.FC = () => {
 
     const res = await signIn(email, password);
     if (!res.error) {
-      navigate('/my-art');
+      navigate(returnUrl, { replace: true });
     }
   };
 
@@ -38,7 +40,7 @@ export const LoginScreen: React.FC = () => {
     setValidationError(null);
     const res = await signIn('artist@kin-studio.local', 'demo123456');
     if (!res.error) {
-      navigate('/my-art');
+      navigate(returnUrl, { replace: true });
     }
   };
 
@@ -257,6 +259,7 @@ export const LoginScreen: React.FC = () => {
           Don't have an account?{' '}
           <Link
             to="/signup"
+            state={location.state}
             style={{
               color: 'var(--color-accent)',
               fontWeight: 600,

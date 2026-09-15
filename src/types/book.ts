@@ -93,3 +93,36 @@ export interface BookUploadState {
   status: 'idle' | 'uploading' | 'processing' | 'done' | 'error';
   error: string | null;
 }
+
+/**
+ * ReadingSession — represents a contiguous portion of reading activity.
+ * Tracks start and end positions, duration, and AI memory bridge recap.
+ * Stored in Supabase table: reading_sessions (with localStorage fallback).
+ */
+export interface ReadingSession {
+  id: string;
+  user_id: string;
+  book_id: string;
+  started_at: string;        // ISO datetime
+  ended_at: string;          // ISO datetime
+  start_page: number;        // 1-indexed
+  end_page: number;          // 1-indexed
+  start_position?: number;   // 0.0 - 1.0 scroll offset
+  end_position?: number;     // 0.0 - 1.0 scroll offset
+  duration_seconds: number;  // active reading time in seconds
+  pages_read: number;        // number of pages covered
+  is_meaningful: boolean;    // whether session met threshold for AI recap
+  recap: string | null;      // AI memory bridge recap (~30s read)
+  recap_error?: string | null; // Error message if AI generation failed (prevents infinite re-querying)
+  recap_generated_at: string | null;
+  recap_viewed_at: string | null;
+  created_at: string;        // ISO datetime
+  updated_at: string;        // ISO datetime
+}
+
+export interface RecapGenerationOptions {
+  bookTitle?: string;
+  author?: string;
+  forceRegenerate?: boolean;
+}
+

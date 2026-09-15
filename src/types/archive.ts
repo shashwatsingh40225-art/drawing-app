@@ -16,21 +16,3 @@ export interface KinArchiveAsset {
   rights_status: string;
 }
 
-/**
- * ArtRoomPin — legacy pin interface for Art Room canvas.
- */
-export interface ArtRoomPin {
-  id: string;
-  user_id: string;
-  source_type: 'user_artwork' | 'kin_archive';
-  source_id: string;       // artwork.id or KinArchiveAsset.id
-  image_url: string;
-  label: string;
-  x: number;               // canvas x position (px)
-  y: number;               // canvas y position (px)
-  width: number;           // canvas width (px)
-  rotation: number;        // degrees
-  z_index: number;
-  note: string;
-  created_at: string;
-}

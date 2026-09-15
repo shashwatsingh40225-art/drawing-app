@@ -11,22 +11,27 @@ export function AppLayout() {
 
   useEffect(() => {
     initialize();
+    try {
+      localStorage.removeItem('kin_art_room_board_cache');
+      localStorage.removeItem('kin_art_room_items_cache');
+    } catch {
+      // ignore storage access errors in restricted environments
+    }
   }, [initialize]);
 
-  // Auth guard: Protect personal art, library, reader, art-room, and upload routes
+  // Auth guard: Protect personal art, library, reader, and upload routes
   const isProtectedRoute = 
     location.pathname.startsWith('/my-art') ||
     location.pathname.startsWith('/sketchbook') || // legacy redirect still protected
     location.pathname.startsWith('/library') ||
     location.pathname.startsWith('/reader') ||
-    location.pathname.startsWith('/art-room') ||
     location.pathname.startsWith('/upload');
 
   useEffect(() => {
     if (!loading && !user && isProtectedRoute) {
-      navigate('/login');
+      navigate('/login', { state: { from: location.pathname + location.search + location.hash } });
     }
-  }, [user, loading, isProtectedRoute, navigate]);
+  }, [user, loading, isProtectedRoute, navigate, location.pathname, location.search, location.hash]);
 
   if (loading) {
     return (
@@ -104,14 +109,11 @@ export function AppLayout() {
             <Link to="/my-art" style={{ color: 'inherit', textDecoration: 'underline' }}>
               My Art
             </Link>
-            <Link to="/library" style={{ color: 'inherit', textDecoration: 'underline' }}>
-              My Library
-            </Link>
             <Link to="/archive" style={{ color: 'inherit', textDecoration: 'underline' }}>
               Kin Archive
             </Link>
-            <Link to="/art-room" style={{ color: 'inherit', textDecoration: 'underline' }}>
-              My Art Room
+            <Link to="/library" style={{ color: 'inherit', textDecoration: 'underline' }}>
+              My Library
             </Link>
             <Link to="/upload" style={{ color: 'inherit', textDecoration: 'underline' }}>
               Upload Drawing
