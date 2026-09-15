@@ -12,6 +12,7 @@ await build({
   entryPoints: {
     readingSessionLogic: join(root, 'src/services/readingSessionLogic.ts'),
     recap: join(root, 'api/recap.ts'),
+    ppTimeline: join(root, 'src/features/ppMode/ppTimeline.ts'),
   },
   outdir,
   bundle: true,

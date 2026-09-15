@@ -9,9 +9,10 @@ import {
   User as UserIcon, 
   Menu, 
   X, 
-  Archive, 
-  Home 
+  Archive,
+  Home
 } from 'lucide-react';
+import { PPModeTrigger } from '../features/ppMode/PPModeTrigger';
 
 export type ScreenType = string;
 
@@ -150,46 +151,50 @@ export const Navigation: React.FC<NavigationProps> = () => {
           justifyContent: 'space-between',
         }}
       >
-        {/* Brand Logo */}
-        <Link
-          to="/"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            textDecoration: 'none',
-          }}
-          aria-label="Kin Home"
-        >
-          <img src="/brand/logo-mark-simple-48.png" alt="Kin logo mark" style={{ height: '32px', width: '32px', objectFit: 'contain' }} />
-          <div>
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '1.45rem',
-                fontWeight: 700,
-                color: 'var(--color-primary)',
-                letterSpacing: '-0.02em',
-                lineHeight: 1,
-              }}
-            >
-              Kin
+        {/* Brand Logo + PP Mode trigger */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Link
+            to="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              textDecoration: 'none',
+            }}
+            aria-label="Kin Home"
+          >
+            <img src="/brand/logo-mark-simple-48.png" alt="Kin logo mark" style={{ height: '32px', width: '32px', objectFit: 'contain' }} />
+            <div>
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '1.45rem',
+                  fontWeight: 700,
+                  color: 'var(--color-primary)',
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1,
+                }}
+              >
+                Kin
+              </div>
+              <div
+                className="nav-brand-subline"
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  color: 'var(--color-secondary)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  marginTop: '2px',
+                }}
+              >
+                Art Companion
+              </div>
             </div>
-            <div
-              style={{
-                fontFamily: 'var(--font-body)',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                color: 'var(--color-secondary)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                marginTop: '2px',
-              }}
-            >
-              Art Companion
-            </div>
-          </div>
-        </Link>
+          </Link>
+          <PPModeTrigger />
+        </div>
 
         {/* Desktop Navigation Links — 3 Regrouped Items: Home, Art, Reading */}
         <nav

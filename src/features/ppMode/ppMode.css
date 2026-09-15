@@ -1,0 +1,1399 @@
+/* PP Mode — a temporary, removable birthday easter egg. Every class/keyframe here is
+   prefixed pp- so the whole feature can be deleted without touching the rest of the app. */
+
+/* ---------------------------------------------------------------------- */
+/* Trigger button                                                         */
+/* ---------------------------------------------------------------------- */
+
+.pp-trigger-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.pp-trigger {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.pp-trigger:disabled {
+  cursor: default;
+}
+
+.pp-trigger-ring {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, #fbf7ee 70%);
+  border: 2px solid #d6337a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 0 rgba(214, 51, 122, 0.55);
+  animation: pp-eye-breathe 2200ms ease-in-out infinite;
+  transition: transform 150ms ease;
+}
+
+.pp-trigger:hover .pp-trigger-ring {
+  transform: scale(1.08);
+}
+
+.pp-trigger:active .pp-trigger-ring {
+  transform: scale(0.92);
+}
+
+.pp-trigger-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  animation: pp-eye-look 3200ms ease-in-out infinite;
+}
+
+.pp-trigger-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  font-family: var(--font-body, sans-serif);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  background: #d6337a;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1.5px solid #fbf7ee;
+  line-height: 1.4;
+}
+
+.pp-trigger-pressed .pp-trigger-ring {
+  animation: pp-eye-press 250ms ease-out;
+}
+
+.pp-trigger-wiggle .pp-trigger-ring {
+  animation: pp-eye-breathe 2200ms ease-in-out infinite, pp-eye-wiggle 300ms ease-in-out 3;
+}
+
+.pp-trigger-bubble {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: #fbf7ee;
+  color: #3a2140;
+  font-family: var(--font-body, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-card, 0 4px 16px rgba(36, 19, 41, 0.18));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease, transform 300ms ease;
+  z-index: 60;
+}
+
+.pp-trigger-bubble::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 5px solid #fbf7ee;
+}
+
+.pp-trigger-bubble-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@keyframes pp-eye-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(214, 51, 122, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(214, 51, 122, 0);
+  }
+}
+
+@keyframes pp-eye-look {
+  0%,
+  100% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes pp-eye-press {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.85);
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes pp-eye-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(14deg);
+  }
+  75% {
+    transform: rotate(-14deg);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Overlay shell                                                          */
+/* ---------------------------------------------------------------------- */
+
+.pp-overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  overflow: hidden;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.pp-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  --pp-center-top: 40%;
+  --pp-mask-w: min(74vw, 500px);
+}
+
+@media (max-width: 640px) {
+  .pp-stage {
+    --pp-center-top: 36%;
+  }
+}
+
+.pp-center-column {
+  position: absolute;
+  left: 50%;
+  top: var(--pp-center-top);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2vh;
+  width: 100%;
+  z-index: 30;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Backdrop, rings, rays, light core, flash                                */
+/* ---------------------------------------------------------------------- */
+
+.pp-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #241329;
+  opacity: 0;
+  animation: pp-backdrop-in 2000ms ease-in 0ms forwards, pp-fade-out 500ms ease-in 9500ms forwards;
+}
+
+@keyframes pp-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.94;
+  }
+}
+
+@keyframes pp-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.pp-rings {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  margin: -75vmax 0 0 -75vmax;
+  background-image: url('/brand/pattern-rings.png');
+  background-size: 420px 420px;
+  opacity: 0;
+  animation: pp-rings-fade-in 800ms ease-in 2200ms forwards, pp-rings-spin 40000ms linear 2200ms infinite,
+    pp-rings-fade-out 500ms ease-in 9500ms forwards;
+}
+
+@keyframes pp-rings-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.12;
+  }
+}
+
+@keyframes pp-rings-fade-out {
+  from {
+    opacity: 0.12;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes pp-rings-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pp-rays {
+  position: absolute;
+  inset: -25%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 232, 163, 0.28) 0deg 8deg, transparent 8deg 22deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+  opacity: 0;
+  animation: pp-rays-fade-in 500ms ease-in 2500ms forwards, pp-rays-spin 14000ms linear 2500ms infinite,
+    pp-fade-out 500ms ease-in 9500ms forwards;
+}
+
+@keyframes pp-rays-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+@keyframes pp-rays-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pp-core-outer {
+  position: absolute;
+  left: 50%;
+  top: var(--pp-center-top);
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  transform: scale(0);
+  animation: pp-core-grow-settle 1000ms ease-out 2200ms forwards, pp-fade-out 500ms ease-in 9500ms forwards;
+}
+
+@keyframes pp-core-grow-settle {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(60);
+  }
+  100% {
+    transform: scale(18);
+  }
+}
+
+.pp-core-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, #ffe8a3 35%, rgba(255, 45, 149, 0.6) 60%, transparent 72%);
+  transform: scale(1);
+  animation: pp-core-pulse 2000ms ease-in-out 3200ms infinite;
+}
+
+@keyframes pp-core-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.pp-flash {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  opacity: 0;
+  animation: pp-flash-anim 600ms linear 2500ms forwards;
+}
+
+@keyframes pp-flash-anim {
+  0% {
+    opacity: 0;
+  }
+  33% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Snakes — swarm, fling, and the orbiting ring                           */
+/* ---------------------------------------------------------------------- */
+
+.pp-swarm {
+  position: absolute;
+  inset: 0;
+}
+
+.pp-snake-slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.pp-snake-travel {
+  position: relative;
+  transform: translate(0, 0) rotate(var(--pp-rot));
+  animation: pp-snake-travel-anim var(--pp-dur) cubic-bezier(0.16, 1, 0.3, 1) var(--pp-delay) forwards;
+  will-change: transform;
+}
+
+@keyframes pp-snake-travel-anim {
+  from {
+    transform: translate(0, 0) rotate(var(--pp-rot));
+  }
+  to {
+    transform: translate(var(--pp-dx), var(--pp-dy)) rotate(var(--pp-rot));
+  }
+}
+
+.pp-snake-fling {
+  position: relative;
+  transform: translate(0, 0);
+  opacity: 1;
+  animation: pp-snake-fling-anim 600ms ease-in 2400ms forwards;
+  will-change: transform;
+}
+
+@keyframes pp-snake-fling-anim {
+  from {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(var(--pp-fling-nx) * 120vmax), calc(var(--pp-fling-ny) * 120vmax));
+    opacity: 0;
+  }
+}
+
+.pp-snake-body {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+}
+
+.pp-snake-segment {
+  position: relative;
+  border-radius: 50%;
+  border: 2px solid #241329;
+  margin-left: -22%;
+  animation: pp-snake-wiggle 600ms ease-in-out var(--pp-seg-delay) infinite;
+}
+
+@keyframes pp-snake-wiggle {
+  0%,
+  100% {
+    transform: translateY(-35%);
+  }
+  50% {
+    transform: translateY(35%);
+  }
+}
+
+.pp-snake-head {
+  z-index: 20;
+}
+
+.pp-snake-eye {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  background: #ffffff;
+  border: 2px solid #241329;
+  border-radius: 50%;
+  top: 8%;
+}
+
+.pp-snake-eye-l {
+  left: 6%;
+}
+
+.pp-snake-eye-r {
+  right: 6%;
+}
+
+.pp-snake-pupil {
+  position: absolute;
+  width: 50%;
+  height: 50%;
+  top: 25%;
+  left: 25%;
+  background: #241329;
+  border-radius: 50%;
+  animation: pp-snake-dart 500ms steps(2) infinite;
+}
+
+@keyframes pp-snake-dart {
+  0%,
+  49% {
+    transform: translateX(-15%);
+  }
+  50%,
+  100% {
+    transform: translateX(15%);
+  }
+}
+
+.pp-snake-cheek {
+  position: absolute;
+  width: 20%;
+  height: 14%;
+  background: #ff8fc2;
+  opacity: 0.6;
+  border-radius: 50%;
+  bottom: 16%;
+}
+
+.pp-snake-cheek-l {
+  left: 0%;
+}
+
+.pp-snake-cheek-r {
+  right: 0%;
+}
+
+.pp-snake-tongue {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  width: 8%;
+  height: 22%;
+  background: #d6337a;
+  transform-origin: top center;
+  transform: scaleY(0);
+  animation: pp-snake-tongue-flick 900ms ease-in-out var(--pp-tongue-delay) infinite;
+}
+
+@keyframes pp-snake-tongue-flick {
+  0%,
+  70% {
+    transform: scaleY(0);
+  }
+  85% {
+    transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+
+.pp-orbit-wrap {
+  position: absolute;
+  left: 50%;
+  top: var(--pp-center-top);
+  width: 0;
+  height: 0;
+}
+
+.pp-orbit-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--pp-mask-w) * 1.24);
+  height: calc(var(--pp-mask-w) * 1.24);
+  margin: calc(var(--pp-mask-w) * -0.62) 0 0 calc(var(--pp-mask-w) * -0.62);
+  opacity: 0;
+  animation: pp-orbit-fade-in 400ms ease-in 5500ms forwards, pp-orbit-spin 6000ms linear 5500ms infinite,
+    pp-carnival-exit-fade 400ms ease-in 9200ms forwards;
+}
+
+@keyframes pp-orbit-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pp-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pp-carnival-exit-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.pp-orbit-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--pp-orbit-angle)) translateX(calc(var(--pp-mask-w) * 0.62));
+}
+
+.pp-snake-orbit-member {
+  transform: translate(-50%, -50%) scale(0.9);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mask                                                                    */
+/* ---------------------------------------------------------------------- */
+
+.pp-mask-block {
+  width: var(--pp-mask-w);
+  display: flex;
+  justify-content: center;
+}
+
+.pp-mask-lifecycle {
+  position: relative;
+  width: 100%;
+  transform: scale(0.3) rotate(-15deg);
+  animation: pp-mask-enter 1200ms cubic-bezier(0.34, 1.56, 0.64, 1) 2800ms forwards,
+    pp-mask-exit 500ms ease-in 9400ms forwards;
+}
+
+@keyframes pp-mask-enter {
+  0% {
+    transform: scale(0.3) rotate(-15deg);
+  }
+  58% {
+    transform: scale(1.1) rotate(-3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes pp-mask-exit {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+.pp-mask-float {
+  position: relative;
+  transform: translateY(0);
+  animation: pp-mask-float-anim 3000ms ease-in-out 4000ms infinite;
+  will-change: transform;
+}
+
+@keyframes pp-mask-float-anim {
+  0%,
+  100% {
+    transform: translateY(-8px);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+
+.pp-mask-glow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: blur(24px) brightness(1.6) saturate(1.4);
+  opacity: 0.55;
+  transform: scale(1);
+  z-index: 1;
+  animation: pp-mask-glow-pulse 1600ms ease-in-out 3500ms infinite;
+}
+
+@keyframes pp-mask-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.pp-mask-img {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-height: 46vh;
+  object-fit: contain;
+  z-index: 2;
+}
+
+.pp-mask-shine {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  -webkit-mask-image: url('/pp/mask.png');
+  mask-image: url('/pp/mask.png');
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.85) 50%, transparent 60%);
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  animation: pp-mask-shine-sweep 2000ms linear 4000ms infinite;
+}
+
+@keyframes pp-mask-shine-sweep {
+  0% {
+    background-position: 150% 0;
+  }
+  35% {
+    background-position: -50% 0;
+  }
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+.pp-mask-glow-static {
+  position: absolute;
+  inset: 0;
+  filter: blur(24px) brightness(1.6) saturate(1.4);
+  opacity: 0.75;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Message                                                                 */
+/* ---------------------------------------------------------------------- */
+
+.pp-message-block {
+  width: 90vw;
+  max-width: 900px;
+  text-align: center;
+  transform: scale(1);
+  opacity: 1;
+}
+
+.pp-message-lifecycle {
+  position: relative;
+  animation: pp-message-exit 500ms ease-in 9400ms forwards;
+}
+
+@keyframes pp-message-exit {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
+.pp-message-line {
+  font-family: var(--font-display, 'Fraunces', Georgia, serif);
+  color: #fbf7ee;
+  text-shadow: 0 0 18px rgba(255, 209, 102, 0.65), 3px 3px 0 #241329;
+  position: relative;
+}
+
+.pp-message-line-1 {
+  font-size: clamp(1.9rem, 7.5vw, 4.2rem);
+  font-weight: 700;
+}
+
+.pp-message-line-2 {
+  font-size: clamp(2.8rem, 13vw, 7rem);
+  font-weight: 800;
+  font-style: italic;
+}
+
+.pp-highlighter {
+  position: absolute;
+  left: 12%;
+  top: 20%;
+  width: 76%;
+  height: 60%;
+  background: #d6337a;
+  opacity: 0;
+  border-radius: 999px;
+  transform: skewX(-6deg) scaleX(0);
+  transform-origin: left center;
+  z-index: -1;
+  animation: pp-highlighter-in 400ms ease-out 3500ms forwards, pp-highlighter-pulse 2000ms ease-in-out 3900ms infinite;
+}
+
+@keyframes pp-highlighter-in {
+  from {
+    opacity: 0;
+    transform: skewX(-6deg) scaleX(0);
+  }
+  to {
+    opacity: 0.35;
+    transform: skewX(-6deg) scaleX(1);
+  }
+}
+
+@keyframes pp-highlighter-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pp-highlighter-static {
+  opacity: 0.35;
+  transform: skewX(-6deg) scaleX(1);
+}
+
+.pp-letters {
+  display: inline-block;
+}
+
+.pp-letter {
+  display: inline-block;
+  transform: scale(0) rotate(-20deg) translateY(30px);
+  opacity: 0;
+  animation: pp-letter-pop 450ms cubic-bezier(0.34, 1.56, 0.64, 1) calc(3600ms + var(--pp-letter-index) * 45ms)
+    forwards;
+}
+
+.pp-letter-space {
+  width: 0.35em;
+}
+
+.pp-letter-inner {
+  display: inline-block;
+  animation: pp-letter-wave 1200ms ease-in-out calc(4700ms + var(--pp-letter-index) * 60ms) infinite,
+    pp-letter-color 3000ms linear calc(4700ms + var(--pp-letter-index) * 120ms) infinite;
+}
+
+@keyframes pp-letter-pop {
+  0% {
+    transform: scale(0) rotate(-20deg) translateY(30px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.35) rotate(4deg) translateY(-6px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pp-letter-wave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pp-letter-color {
+  0% {
+    color: #ffd166;
+  }
+  20% {
+    color: #ff2d95;
+  }
+  40% {
+    color: #7cfc6a;
+  }
+  60% {
+    color: #9ee0c9;
+  }
+  80% {
+    color: #fbf7ee;
+  }
+  100% {
+    color: #ffd166;
+  }
+}
+
+.pp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Stickers                                                                */
+/* ---------------------------------------------------------------------- */
+
+.pp-cast {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+
+.pp-sticker-lifecycle {
+  opacity: 0;
+  transform: translateY(30px) scale(0.6);
+  animation: pp-sticker-enter 500ms cubic-bezier(0.34, 1.56, 0.64, 1) calc(4200ms + var(--pp-sticker-index) * 200ms)
+      forwards,
+    pp-sticker-exit 400ms ease-in 9200ms forwards;
+}
+
+@keyframes pp-sticker-enter {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pp-sticker-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--pp-exit-dx), var(--pp-exit-dy)) scale(0.7);
+  }
+}
+
+.pp-sticker-framed .pp-sticker-img {
+  border: 6px solid #fbf7ee;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  display: block;
+}
+
+.pp-sticker-cutout .pp-sticker-img {
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.4));
+  display: block;
+}
+
+.pp-sticker-pos-s1 {
+  position: absolute;
+  left: 4%;
+  bottom: 6%;
+}
+
+.pp-sticker-pos-s2 {
+  position: absolute;
+  right: 4%;
+  bottom: 6%;
+}
+
+.pp-sticker-pos-s3 {
+  position: absolute;
+  left: 6%;
+  top: 8%;
+}
+
+.pp-sticker-pos-s4 {
+  position: absolute;
+  right: 6%;
+  top: 8%;
+}
+
+.pp-sticker-pos-s5 {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.pp-sticker-pos-s6 {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.pp-sticker-pos-s7 {
+  position: absolute;
+  left: 2%;
+  top: 62%;
+}
+
+@media (max-width: 640px) {
+  .pp-sticker-pos-s1 {
+    left: 2%;
+    bottom: 4%;
+  }
+  .pp-sticker-pos-s2 {
+    right: 2%;
+    bottom: 4%;
+  }
+  .pp-sticker-pos-s3 {
+    left: 4%;
+    top: 4%;
+  }
+  .pp-sticker-pos-s4 {
+    right: 4%;
+    top: 4%;
+  }
+  .pp-sticker-pos-s5,
+  .pp-sticker-pos-s6,
+  .pp-sticker-pos-s7 {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) and (max-height: 700px) {
+  .pp-sticker-pos-s3,
+  .pp-sticker-pos-s4 {
+    display: none;
+  }
+}
+
+.pp-sticker-loop {
+  display: block;
+}
+
+.pp-personality-boing {
+  animation: pp-boing 700ms ease-in-out infinite;
+}
+
+@keyframes pp-boing {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+  30% {
+    transform: scaleY(0.85) translateY(4px);
+  }
+  55% {
+    transform: scaleY(1.12) translateY(-10px);
+  }
+  75% {
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+.pp-personality-dapper {
+  animation: pp-dapper 900ms ease-in-out infinite;
+}
+
+@keyframes pp-dapper {
+  0%,
+  100% {
+    transform: rotate(-8deg) translateX(-6px);
+  }
+  50% {
+    transform: rotate(8deg) translateX(6px);
+  }
+}
+
+.pp-personality-swing {
+  transform-origin: top center;
+  animation: pp-swing 1400ms ease-in-out infinite;
+}
+
+@keyframes pp-swing {
+  0%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}
+
+.pp-personality-flap {
+  animation: pp-flap 800ms ease-in-out infinite;
+}
+
+@keyframes pp-flap {
+  0%,
+  100% {
+    transform: translateY(-10px) scaleX(1);
+  }
+  50% {
+    transform: translateY(10px) scaleX(0.94);
+  }
+}
+
+.pp-personality-peek-left {
+  animation: pp-peek-left 1600ms ease-in-out infinite;
+}
+
+@keyframes pp-peek-left {
+  0%,
+  100% {
+    transform: translateX(-40%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+}
+
+.pp-personality-peek-right {
+  animation: pp-peek-right 1600ms ease-in-out 800ms infinite;
+}
+
+@keyframes pp-peek-right {
+  0%,
+  100% {
+    transform: translateX(40%);
+  }
+  50% {
+    transform: translateX(0%);
+  }
+}
+
+.pp-personality-shimmy {
+  animation: pp-shimmy 700ms ease-in-out infinite;
+}
+
+@keyframes pp-shimmy {
+  0%,
+  100% {
+    transform: skewX(-6deg);
+  }
+  50% {
+    transform: skewX(6deg);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Living app icons                                                       */
+/* ---------------------------------------------------------------------- */
+
+.pp-icons-row {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 18px;
+  z-index: 25;
+}
+
+@media (max-width: 640px) {
+  .pp-icons-row {
+    bottom: auto;
+    top: 68%;
+    gap: 12px;
+  }
+}
+
+.pp-icon-lifecycle {
+  display: inline-flex;
+  opacity: 0;
+  transform: translateX(-40vw);
+  animation: pp-icon-enter 500ms cubic-bezier(0.34, 1.56, 0.64, 1) calc(5000ms + var(--pp-icon-index) * 150ms)
+      forwards,
+    pp-icon-exit 500ms ease-in 9200ms forwards;
+}
+
+@keyframes pp-icon-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-40vw);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pp-icon-exit {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(60vw);
+  }
+}
+
+.pp-icon-loop {
+  animation: pp-icon-hop 450ms ease-in-out calc(5900ms + var(--pp-icon-index) * 90ms) infinite;
+}
+
+@keyframes pp-icon-hop {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-18px) rotate(6deg);
+  }
+}
+
+.pp-icon-badge {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #fbf7ee;
+  border: 2.5px solid #241329;
+  box-shadow: 3px 3px 0 #d6337a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .pp-icon-badge {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+.pp-icon-glyph {
+  width: 30px;
+  height: 30px;
+  color: #3a2140;
+}
+
+@media (max-width: 640px) {
+  .pp-icon-glyph {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+.pp-googly {
+  position: absolute;
+  top: -4px;
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border: 2px solid #241329;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pp-googly-l {
+  left: 12px;
+}
+
+.pp-googly-r {
+  right: 12px;
+}
+
+@media (max-width: 640px) {
+  .pp-googly {
+    width: 11px;
+    height: 11px;
+  }
+  .pp-googly-l {
+    left: 8px;
+  }
+  .pp-googly-r {
+    right: 8px;
+  }
+}
+
+.pp-googly-pupil {
+  width: 6px;
+  height: 6px;
+  background: #241329;
+  border-radius: 50%;
+  animation: pp-googly-dart 500ms steps(2) calc(var(--pp-icon-index) * 80ms) infinite;
+}
+
+@keyframes pp-googly-dart {
+  0%,
+  49% {
+    transform: translateX(-3px);
+  }
+  50%,
+  100% {
+    transform: translateX(3px);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Confetti                                                                */
+/* ---------------------------------------------------------------------- */
+
+.pp-confetti-layer {
+  position: absolute;
+  left: 50%;
+  top: var(--pp-center-top);
+  width: 0;
+  height: 0;
+}
+
+.pp-confetti-piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation-name: pp-confetti-burst;
+  animation-duration: 1800ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: forwards;
+}
+
+@keyframes pp-confetti-burst {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--pp-confetti-dx)), calc(-50% + var(--pp-confetti-dy)))
+      rotate(var(--pp-confetti-rot));
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Afterparty — the real app chrome wiggles as PP Mode hands back control  */
+/* ---------------------------------------------------------------------- */
+
+body.pp-afterparty .desktop-nav-item svg,
+body.pp-afterparty .mobile-bottom-nav-item svg,
+body.pp-afterparty .nav-upload-btn svg,
+body.pp-afterparty header img {
+  animation: pp-afterparty-wiggle 350ms ease-in-out infinite;
+}
+
+@keyframes pp-afterparty-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(12deg) translateY(-2px);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Reduced-motion variant — JS state classes + CSS transitions             */
+/* (the global *,*::before,*::after reduced-motion rule in index.css      */
+/* collapses every CSS animation to its end state in one frame, so this   */
+/* variant cannot rely on animation-delay at all)                         */
+/* ---------------------------------------------------------------------- */
+
+.pp-overlay-root-rm .pp-rm-transition {
+  opacity: 0;
+  transition: opacity 800ms ease;
+}
+
+.pp-overlay-root-rm .pp-rm-visible {
+  opacity: 1;
+}
+
+.pp-overlay-root-rm .pp-rm-out {
+  opacity: 0 !important;
+  transition: opacity 800ms ease;
+}
+
+.pp-rm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #241329;
+}
+
+.pp-rm-core {
+  position: absolute;
+  left: 50%;
+  top: var(--pp-center-top);
+  width: 50vmin;
+  height: 50vmin;
+  margin: -25vmin 0 0 -25vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe8a3 0%, rgba(255, 45, 149, 0.4) 55%, transparent 75%);
+}
+
+.pp-rm-stage .pp-mask-block {
+  position: relative;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Short viewports (landscape phones) — appended last so it wins the       */
+/* cascade tie against every unconditional rule above it.                  */
+/* ---------------------------------------------------------------------- */
+
+@media (max-height: 480px) {
+  .pp-center-column {
+    top: 3%;
+    transform: translateX(-50%);
+    gap: 1vh;
+  }
+
+  .pp-mask-img,
+  .pp-mask-glow,
+  .pp-mask-glow-static {
+    max-height: 26vh;
+  }
+
+  .pp-message-line-1 {
+    font-size: clamp(1rem, 4vw, 1.5rem);
+  }
+
+  .pp-message-line-2 {
+    font-size: clamp(1.4rem, 6vw, 2rem);
+  }
+}

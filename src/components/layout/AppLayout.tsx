@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { Navigation } from '../Navigation';
 import { ConcentricPortal } from '../ConcentricPortal';
+import { PPModeOverlay } from '../../features/ppMode/PPModeOverlay';
 
 export function AppLayout() {
   const { user, loading, initialize } = useAuthStore();
@@ -126,6 +127,8 @@ export function AppLayout() {
           </div>
         </div>
       </footer>}
+
+      <PPModeOverlay />
     </div>
   );
 }
