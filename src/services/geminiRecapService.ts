@@ -36,11 +36,17 @@ export interface RecapResult {
 
 const REQUEST_TIMEOUT_MS = 35_000;
 
+// Empty by default, so `fetch(apiBase + '/api/recap')` stays a same-origin relative
+// call on the web (as today). Set VITE_API_BASE_URL only for builds that load the app
+// from an origin without this API alongside it (e.g. a packaged mobile app), pointing
+// it at the deployed site, e.g. https://kin-app.vercel.app.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
+
 export async function requestSessionRecap(request: RecapRequest, accessToken?: string): Promise<RecapResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const res = await fetch('/api/recap', {
+    const res = await fetch(`${API_BASE_URL}/api/recap`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

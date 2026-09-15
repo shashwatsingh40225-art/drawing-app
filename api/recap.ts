@@ -8,7 +8,9 @@
  *   2. loads the session under RLS (so it must be theirs) and checks its book is theirs,
  *   3. rejects any page outside the stored session range — the spoiler guard does not rely on
  *      the prompt alone,
- *   4. calls Gemini Flash with a key that never reaches the client,
+ *   4. calls Gemini Flash with a key that never reaches the client, falling back to NVIDIA NIM
+ *      (a different provider, so a different quota pool) if Gemini is unconfigured, rate-limited,
+ *      or unreachable,
  *   5. stores the recap on the session, guarded by the same range so a session whose boundaries
  *      were edited meanwhile is never overwritten with a recap of its old pages.
  */
@@ -47,9 +49,15 @@ export type RecapErrorCode =
   | 'unavailable';
 
 export const DEFAULT_GEMINI_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
+export const DEFAULT_NVIDIA_MODELS = [
+  'meta/llama-3.3-70b-instruct',
+  'meta/llama-3.1-8b-instruct',
+  'mistralai/mixtral-8x22b-instruct-v0.1',
+];
 export const INSUFFICIENT_CONTENT = 'INSUFFICIENT_CONTENT';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 const GEMINI_TIMEOUT_MS = 25_000;
 const MAX_SESSION_PAGES = 150;
 const MAX_PAGE_CHARS = 8_000;
@@ -221,13 +229,19 @@ export function readCandidate(data: unknown): { text: string; finishReason?: str
 // ---------------------------------------------------------------------------
 
 type Failure = { ok: false; status: number; code: RecapErrorCode; message: string };
+type Generation = { ok: true; text: string; truncated: boolean; model: string; provider: 'gemini' | 'nvidia' };
+
+/** Gemini rejected/unreachable/rate-limited: worth handing to a different provider with its own quota. */
+function isFallbackWorthy(f: Failure): boolean {
+  return f.code === 'quota' || f.code === 'not_configured' || f.code === 'unavailable';
+}
 
 async function callGemini(
   env: Env,
   apiKey: string,
   userPrompt: string,
   fetchImpl: typeof fetch
-): Promise<{ ok: true; text: string; truncated: boolean; model: string } | Failure> {
+): Promise<Generation | Failure> {
   const models = env.GEMINI_MODEL
     ? env.GEMINI_MODEL.split(',').map((m) => m.trim()).filter(Boolean)
     : DEFAULT_GEMINI_MODELS;
@@ -282,7 +296,75 @@ async function callGemini(
       return { ok: false, status: 422, code: 'blocked', message: 'A recap could not be written for these pages.' };
     }
     if (!candidate.text.trim()) continue;
-    return { ok: true, text: candidate.text, truncated: candidate.finishReason === 'MAX_TOKENS', model };
+    return { ok: true, text: candidate.text, truncated: candidate.finishReason === 'MAX_TOKENS', model, provider: 'gemini' };
+  }
+  return failure;
+}
+
+/** NVIDIA NIM's OpenAI-compatible chat-completions API — a separate provider with its own quota. */
+async function callNvidia(
+  env: Env,
+  apiKey: string,
+  userPrompt: string,
+  fetchImpl: typeof fetch
+): Promise<Generation | Failure> {
+  const models = env.NVIDIA_MODEL
+    ? env.NVIDIA_MODEL.split(',').map((m) => m.trim()).filter(Boolean)
+    : DEFAULT_NVIDIA_MODELS;
+  const baseUrl = (env.NVIDIA_BASE_URL || NVIDIA_BASE_URL).replace(/\/$/, '');
+  let failure: Failure = { ok: false, status: 502, code: 'unavailable', message: 'The recap service is unavailable right now.' };
+
+  for (const model of models) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetchImpl(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_INSTRUCTION },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 2048,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      const timedOut = (err as Error)?.name === 'AbortError';
+      return { ok: false, status: 504, code: 'unavailable', message: timedOut ? 'The recap took too long.' : 'Could not reach the recap service.' };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.status === 429) {
+      return { ok: false, status: 429, code: 'quota', message: 'Recap limit reached for now. Try again later.' };
+    }
+    if (res.status === 401 || res.status === 403) {
+      const detail = await res.text().catch(() => '');
+      console.warn(`[recap] NVIDIA rejected the API key (HTTP ${res.status}): ${detail.slice(0, 200)}`);
+      return { ok: false, status: 503, code: 'not_configured', message: 'The recap service is not available right now.' };
+    }
+    if (!res.ok) {
+      // 404: model not available to this key — try the next one. 5xx: transient — try the next one.
+      failure = { ok: false, status: 502, code: 'unavailable', message: 'The recap service is unavailable right now.' };
+      if (res.status === 404 || res.status >= 500) continue;
+      return failure;
+    }
+
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      continue;
+    }
+    const choice = (data as { choices?: { message?: { content?: unknown }; finish_reason?: string }[] } | null)?.choices?.[0];
+    const text = typeof choice?.message?.content === 'string' ? choice.message.content : '';
+    if (!text.trim()) continue;
+    return { ok: true, text, truncated: choice?.finish_reason === 'length', model, provider: 'nvidia' };
   }
   return failure;
 }
@@ -402,8 +484,9 @@ export async function handleRecapRequest(request: Request, opts: RecapHandlerOpt
   if (!parsed.ok) return json(400, { code: 'invalid_request', error: parsed.error });
   const payload = parsed.value;
 
-  const apiKey = opts.env.GEMINI_API_KEY || opts.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
+  const geminiKey = opts.env.GEMINI_API_KEY || opts.env.VITE_GEMINI_API_KEY;
+  const nvidiaKey = opts.env.NVIDIA_API_KEY || opts.env.NVIDIA_NIM_API_KEY;
+  if (!geminiKey && !nvidiaKey) {
     return json(503, { code: 'not_configured', error: 'The recap service is not configured.' });
   }
 
@@ -429,7 +512,13 @@ export async function handleRecapRequest(request: Request, opts: RecapHandlerOpt
     return json(422, { code: 'insufficient_content', error: 'Not enough readable text on these pages for a recap.' });
   }
 
-  const generation = await callGemini(opts.env, apiKey, buildUserPrompt(payload, excerpt), fetchImpl);
+  const userPrompt = buildUserPrompt(payload, excerpt);
+  let generation: Generation | Failure = geminiKey
+    ? await callGemini(opts.env, geminiKey, userPrompt, fetchImpl)
+    : { ok: false, status: 503, code: 'not_configured', message: 'The recap service is not available right now.' };
+  if (!generation.ok && nvidiaKey && isFallbackWorthy(generation)) {
+    generation = await callNvidia(opts.env, nvidiaKey, userPrompt, fetchImpl);
+  }
   if (!generation.ok) return fail(generation);
 
   const recap = cleanRecapText(generation.text, generation.truncated);
@@ -439,7 +528,7 @@ export async function handleRecapRequest(request: Request, opts: RecapHandlerOpt
 
   const generatedAt = new Date().toISOString();
   const stored = owned ? await storeRecap(owned.cfg, token, owned.row, recap, generatedAt, fetchImpl) : false;
-  return json(200, { recap, generatedAt, stored, model: generation.model });
+  return json(200, { recap, generatedAt, stored, model: generation.model, provider: generation.provider });
 }
 
 export function POST(request: Request): Promise<Response> {

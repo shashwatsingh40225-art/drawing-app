@@ -28,10 +28,18 @@ const request = (body, token = 'user-token') =>
   });
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const gemini = (text, finishReason = 'STOP') => () => jsonResponse(200, { candidates: [{ content: { parts: [{ text }] }, finishReason }] });
+const nvidia = (text, finishReason = 'stop') => () => jsonResponse(200, { choices: [{ message: { content: text }, finish_reason: finishReason }] });
 
-function backend({ user = { id: 'user-1' }, row = { id: SESSION_ID, user_id: 'user-1', book_id: 'book-1', start_page: 84, end_page: 117 }, bookOwned = true, geminiReplies = [gemini(RECAP)] } = {}) {
+function backend({
+  user = { id: 'user-1' },
+  row = { id: SESSION_ID, user_id: 'user-1', book_id: 'book-1', start_page: 84, end_page: 117 },
+  bookOwned = true,
+  geminiReplies = [gemini(RECAP)],
+  nvidiaReplies = [],
+} = {}) {
   const calls = [];
   const replies = [...geminiReplies];
+  const nvReplies = [...nvidiaReplies];
   const fetchImpl = async (url, init = {}) => {
     const u = String(url);
     calls.push({ url: u, init });
@@ -44,9 +52,19 @@ function backend({ user = { id: 'user-1' }, row = { id: SESSION_ID, user_id: 'us
       if (!next) throw new Error('unexpected extra Gemini call');
       return next(u, init);
     }
+    if (u.includes('/chat/completions')) {
+      const next = nvReplies.shift();
+      if (!next) throw new Error('unexpected extra NVIDIA call');
+      return next(u, init);
+    }
     throw new Error(`unexpected fetch ${u}`);
   };
-  return { fetchImpl, calls, geminiCalls: () => calls.filter((c) => c.url.includes(':generateContent')) };
+  return {
+    fetchImpl,
+    calls,
+    geminiCalls: () => calls.filter((c) => c.url.includes(':generateContent')),
+    nvidiaCalls: () => calls.filter((c) => c.url.includes('/chat/completions')),
+  };
 }
 
 async function call(body, { env = ENV, token, allowAnonymous = false, ...backendOptions } = {}) {
@@ -126,6 +144,63 @@ test('missing Gemini key reports not_configured', async () => {
   const { res, body } = await call(payload(), { env: { ...ENV, GEMINI_API_KEY: undefined } });
   assert.equal(res.status, 503);
   assert.equal(body.code, 'not_configured');
+});
+
+test('missing both provider keys reports not_configured', async () => {
+  const { res, body, geminiCalls, nvidiaCalls } = await call(payload(), { env: { ...ENV, GEMINI_API_KEY: undefined } });
+  assert.equal(res.status, 503);
+  assert.equal(body.code, 'not_configured');
+  assert.equal(geminiCalls().length, 0);
+  assert.equal(nvidiaCalls().length, 0);
+});
+
+test('falls back to NVIDIA when Gemini is rate-limited', async () => {
+  const env = { ...ENV, NVIDIA_API_KEY: 'nv-key' };
+  const { res, body, geminiCalls, nvidiaCalls } = await call(payload(), {
+    env,
+    geminiReplies: [() => jsonResponse(429, {})],
+    nvidiaReplies: [nvidia(RECAP)],
+  });
+  assert.equal(res.status, 200);
+  assert.equal(body.recap, RECAP);
+  assert.equal(body.provider, 'nvidia');
+  assert.equal(body.model, api.DEFAULT_NVIDIA_MODELS[0]);
+  assert.equal(geminiCalls().length, 1);
+  const [n] = nvidiaCalls();
+  assert.equal(n.init.headers.Authorization, 'Bearer nv-key');
+  assert.equal(JSON.parse(n.init.body).messages[1].content, JSON.parse(geminiCalls()[0].init.body).contents[0].parts[0].text);
+});
+
+test('falls back to NVIDIA when Gemini is unconfigured or unreachable, trying its own models in order', async () => {
+  const env = { ...ENV, GEMINI_API_KEY: undefined, NVIDIA_API_KEY: 'nv-key' };
+  const { res, body, geminiCalls, nvidiaCalls } = await call(payload(), {
+    env,
+    nvidiaReplies: [() => jsonResponse(404, {}), nvidia(RECAP)],
+  });
+  assert.equal(res.status, 200);
+  assert.equal(body.provider, 'nvidia');
+  assert.equal(body.model, api.DEFAULT_NVIDIA_MODELS[1]);
+  assert.equal(geminiCalls().length, 0);
+  assert.equal(nvidiaCalls().length, 2);
+});
+
+test('NVIDIA quota exhaustion and a rejected NVIDIA key surface cleanly once Gemini has already failed', async () => {
+  const env = { ...ENV, GEMINI_API_KEY: undefined, NVIDIA_API_KEY: 'nv-key' };
+  const quota = await call(payload(), { env, nvidiaReplies: [() => jsonResponse(429, {})] });
+  assert.equal(quota.res.status, 429);
+  assert.equal(quota.body.code, 'quota');
+
+  const denied = await call(payload(), { env, nvidiaReplies: [() => jsonResponse(401, {})] });
+  assert.equal(denied.res.status, 503);
+  assert.equal(denied.body.code, 'not_configured');
+});
+
+test('a content block from Gemini is not retried on NVIDIA', async () => {
+  const env = { ...ENV, NVIDIA_API_KEY: 'nv-key' };
+  const { res, body, nvidiaCalls } = await call(payload(), { env, geminiReplies: [gemini('', 'RECITATION')] });
+  assert.equal(res.status, 422);
+  assert.equal(body.code, 'blocked');
+  assert.equal(nvidiaCalls().length, 0);
 });
 
 test('falls back to the next model when one is unavailable', async () => {
