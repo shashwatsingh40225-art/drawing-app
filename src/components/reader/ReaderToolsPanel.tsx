@@ -43,7 +43,7 @@ const MENU_ITEMS: { view: Exclude<ToolsView, 'menu'>; label: string; icon: React
   { view: 'thumbnails', label: 'Thumbnails', icon: <LayoutGrid size={17} />, color: 'var(--color-secondary)' },
   { view: 'bookmarks', label: 'Bookmarks', icon: <BookmarkCheck size={17} />, color: 'var(--color-accent)' },
   { view: 'archive', label: 'Kin Archive', icon: <Archive size={17} />, color: 'var(--color-secondary)' },
-  { view: 'recap', label: 'Memory Bridge', icon: <Sparkles size={17} />, color: 'var(--color-secondary)' },
+  { view: 'recap', label: 'Recaps', icon: <Sparkles size={17} />, color: 'var(--color-secondary)' },
 ];
 
 const VIEW_TITLES: Record<ToolsView, string> = {
@@ -51,7 +51,7 @@ const VIEW_TITLES: Record<ToolsView, string> = {
   thumbnails: 'Thumbnails',
   bookmarks: 'Bookmarks',
   archive: 'Kin Archive',
-  recap: 'Memory Bridge',
+  recap: 'Recaps',
 };
 
 /**
@@ -317,14 +317,14 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: 1.45, padding: '10px 12px', backgroundColor: 'rgba(180, 83, 31, 0.05)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-md)' }}>
-                Sessions are recorded automatically. Meaningful reading produces a 30-second AI memory bridge grounded in only what you read.
+                Your sessions are tracked automatically. Read for a while, and a short recap of those pages will be waiting next time you open this book.
               </div>
 
               {sessions.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--color-text-muted)' }}>
                   <Sparkles size={32} color="var(--color-secondary)" style={{ opacity: 0.5, marginBottom: '10px' }} />
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '6px' }}>No reading sessions yet</div>
-                  <div style={{ fontSize: '0.78rem', lineHeight: 1.5 }}>Read through this document and return later. Your reading boundaries and memory bridge will appear here automatically.</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '6px' }}>No sessions yet</div>
+                  <div style={{ fontSize: '0.78rem', lineHeight: 1.5 }}>Come back after a longer sitting and a recap of what you read will show up here.</div>
                 </div>
               ) : (
                 sessions.map((sess) => {
@@ -476,7 +476,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                                   type="button"
                                   onClick={() => onRegenerateSessionRecap(sess.id)}
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '0.74rem', color: 'var(--color-text-muted)' }}
-                                  title="Regenerate memory bridge recap"
+                                  title="Regenerate recap"
                                 >
                                   <RotateCcw size={11} />
                                   <span>Get recap</span>

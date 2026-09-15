@@ -67,7 +67,11 @@ export const ReaderScreen: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
-  const [isChromeVisible, setIsChromeVisible] = useState<boolean>(true);
+  // Full-screen is the default reading mode on every device; tapping the page centre reveals chrome.
+  const [isChromeVisible, setIsChromeVisible] = useState<boolean>(false);
+  const [showTapHint, setShowTapHint] = useState<boolean>(
+    () => typeof window !== 'undefined' && !localStorage.getItem('kin_reader_hint_seen')
+  );
   const [toolsOpen, setToolsOpen] = useState<boolean>(false);
   const [pinChooserOpen, setPinChooserOpen] = useState<boolean>(false);
   const [pendingPin, setPendingPin] = useState<PendingPin | null>(null);
@@ -281,6 +285,18 @@ export const ReaderScreen: React.FC = () => {
     },
     [book, generateRecap]
   );
+
+  // Minimal, one-time tap-zone hint — shown once per browser, dismissed by any tap or after a few seconds.
+  const dismissTapHint = useCallback(() => {
+    setShowTapHint(false);
+    localStorage.setItem('kin_reader_hint_seen', '1');
+  }, []);
+
+  useEffect(() => {
+    if (!showTapHint) return;
+    const timer = setTimeout(dismissTapHint, 4000);
+    return () => clearTimeout(timer);
+  }, [showTapHint, dismissTapHint]);
 
   // 7. Document load success
   const handleDocumentLoadSuccess = (numPages: number) => {
@@ -515,10 +531,51 @@ export const ReaderScreen: React.FC = () => {
             onDeleteAnnotation={deleteAnnotation}
             onLoadSuccess={handleDocumentLoadSuccess}
             isChromeHidden={isChromeHidden}
-            onLeftTap={() => handlePageChange(currentPage - 1)}
-            onRightTap={() => handlePageChange(currentPage + 1)}
-            onCenterTap={() => setIsChromeVisible((v) => !v)}
+            onLeftTap={() => {
+              if (showTapHint) dismissTapHint();
+              handlePageChange(currentPage - 1);
+            }}
+            onRightTap={() => {
+              if (showTapHint) dismissTapHint();
+              handlePageChange(currentPage + 1);
+            }}
+            onCenterTap={() => {
+              if (showTapHint) dismissTapHint();
+              setIsChromeVisible((v) => !v);
+            }}
           />
+        )}
+
+        {/* One-time hint: shown once per browser, explains tap zones, then never again */}
+        {showTapHint && !loadingUrl && !fileError && (
+          <div
+            role="status"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              bottom: isMobile ? '28px' : '36px',
+              transform: 'translateX(-50%)',
+              zIndex: 40,
+              maxWidth: 'calc(100vw - 32px)',
+              boxSizing: 'border-box',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              borderRadius: 'var(--radius-pill)',
+              backgroundColor: 'rgba(36, 19, 41, 0.88)',
+              color: '#FFF',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              whiteSpace: isMobile ? 'normal' : 'nowrap',
+              pointerEvents: 'none',
+              boxShadow: 'var(--shadow-modal)',
+            }}
+          >
+            Tap the edges to turn pages · tap the middle for controls
+          </div>
         )}
 
         {/* "Previously…" memory bridge — floats over the page, never blocks it from loading */}
