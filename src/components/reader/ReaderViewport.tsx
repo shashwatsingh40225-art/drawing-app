@@ -22,6 +22,10 @@ interface ReaderViewportProps {
   onLoadSuccess: (numPages: number) => void;
   onLoadError?: (error: Error) => void;
   isChromeHidden?: boolean;
+  /** Scale the page to fill the available height instead of the available width. */
+  fitToPage?: boolean;
+  /** Inverts page luminance for low-light reading; the page content itself isn't recolored. */
+  nightMode?: boolean;
   /** Zone-based tap navigation (decision 2): left third = previous, right third = next, center = chrome toggle. */
   onLeftTap: () => void;
   onCenterTap: () => void;
@@ -42,6 +46,8 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   onLoadSuccess,
   onLoadError,
   isChromeHidden = false,
+  fitToPage = false,
+  nightMode = false,
   onLeftTap,
   onCenterTap,
   onRightTap,
@@ -57,43 +63,55 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
     }
     return 360;
   });
+  const [containerHeight, setContainerHeight] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return Math.max(280, window.innerHeight - 120);
+    }
+    return 600;
+  });
   const [isLandscapePhone, setIsLandscapePhone] = useState<boolean>(() =>
     typeof window !== 'undefined' && window.innerHeight <= 500
   );
 
-  // Measure container width and dynamically recalculate on resize and orientation change
+  // Measure container size and dynamically recalculate on resize and orientation change
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const updateWidth = () => {
+    const updateSize = () => {
       setIsLandscapePhone(typeof window !== 'undefined' && window.innerHeight <= 500);
       const computed = window.getComputedStyle(container);
       const padLeft = parseFloat(computed.paddingLeft) || 0;
       const padRight = parseFloat(computed.paddingRight) || 0;
-      const available = container.clientWidth - (padLeft + padRight);
-      if (available > 0) {
-        setContainerWidth(available);
+      const padTop = parseFloat(computed.paddingTop) || 0;
+      const padBottom = parseFloat(computed.paddingBottom) || 0;
+      const availableWidth = container.clientWidth - (padLeft + padRight);
+      const availableHeight = container.clientHeight - (padTop + padBottom);
+      if (availableWidth > 0) {
+        setContainerWidth(availableWidth);
+      }
+      if (availableHeight > 0) {
+        setContainerHeight(availableHeight);
       }
     };
 
-    updateWidth();
+    updateSize();
 
     let resizeObserver: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
-        updateWidth();
+        updateSize();
       });
       resizeObserver.observe(container);
     }
 
-    window.addEventListener('resize', updateWidth);
-    window.addEventListener('orientationchange', updateWidth);
+    window.addEventListener('resize', updateSize);
+    window.addEventListener('orientationchange', updateSize);
 
     return () => {
       if (resizeObserver) resizeObserver.disconnect();
-      window.removeEventListener('resize', updateWidth);
-      window.removeEventListener('orientationchange', updateWidth);
+      window.removeEventListener('resize', updateSize);
+      window.removeEventListener('orientationchange', updateSize);
     };
   }, []);
 
@@ -120,7 +138,10 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
   const baseFitWidth = Math.min(containerWidth, 840);
   // When zoomed past 1.0, scale effective page width for sharp rendering & contained panning
   const effectivePageWidth = Math.round(baseFitWidth * zoomScale);
-  const isOverflowing = effectivePageWidth > containerWidth;
+  // Fit-to-page scales by available height instead, letting the page find its own width.
+  const useHeightFit = fitToPage && !isImagePlaceholder;
+  const fitPageHeight = Math.max(200, Math.round(containerHeight));
+  const isOverflowing = !useHeightFit && effectivePageWidth > containerWidth;
 
   const isCompactVertical = isChromeHidden || isLandscapePhone;
   const bottomPadding = isCompactVertical ? '16px' : '80px';
@@ -143,7 +164,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
         alignItems: isOverflowing ? 'flex-start' : 'center',
         justifyContent: 'flex-start',
         padding: `${topPadding} 16px ${bottomPadding} 16px`,
-        backgroundColor: 'var(--color-background)',
+        backgroundColor: nightMode ? '#18181a' : 'var(--color-background)',
         WebkitOverflowScrolling: 'touch',
         boxSizing: 'border-box',
       }}
@@ -164,6 +185,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
             margin: isOverflowing ? '0 0 32px 0' : '0 auto 32px auto',
             flexShrink: 0,
             boxSizing: 'border-box',
+            filter: nightMode ? 'invert(0.92) hue-rotate(180deg)' : 'none',
           }}
         >
           <div
@@ -206,11 +228,12 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
         /* Real PDF Document via react-pdf */
         <div
           style={{
-            width: `${effectivePageWidth}px`,
-            maxWidth: zoomScale <= 1 ? '100%' : 'none',
+            width: useHeightFit ? 'auto' : `${effectivePageWidth}px`,
+            maxWidth: useHeightFit || zoomScale <= 1 ? '100%' : 'none',
             margin: isOverflowing ? '0 0 32px 0' : '0 auto 32px auto',
             flexShrink: 0,
             boxSizing: 'border-box',
+            filter: nightMode ? 'invert(0.92) hue-rotate(180deg)' : 'none',
           }}
         >
           <Document
@@ -276,7 +299,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
             >
               <Page
                 pageNumber={currentPage}
-                width={effectivePageWidth}
+                {...(useHeightFit ? { height: fitPageHeight } : { width: effectivePageWidth })}
                 renderTextLayer={true}
                 renderAnnotationLayer={true}
                 loading={

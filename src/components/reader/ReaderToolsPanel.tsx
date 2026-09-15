@@ -15,6 +15,8 @@ import {
   ArrowRight,
   Check,
   BookOpen,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { Bookmark, ReadingSession } from '../../types/book';
 import { KIN_ARCHIVE_ASSETS } from '../../data/kinArchive';
@@ -36,6 +38,8 @@ interface ReaderToolsPanelProps {
   onRegenerateSessionRecap?: (sessionId: string) => Promise<void>;
   onDeleteSession?: (sessionId: string) => Promise<void>;
   onStartAddPin: () => void;
+  nightMode?: boolean;
+  onToggleNightMode?: () => void;
   onClose: () => void;
 }
 
@@ -73,6 +77,8 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   onRegenerateSessionRecap,
   onDeleteSession,
   onStartAddPin,
+  nightMode = false,
+  onToggleNightMode,
   onClose,
 }) => {
   const [view, setView] = useState<ToolsView>('menu');
@@ -186,6 +192,33 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                   <ChevronRight size={15} color="var(--color-text-muted)" />
                 </button>
               ))}
+
+              {onToggleNightMode && (
+                <button
+                  type="button"
+                  onClick={onToggleNightMode}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '12px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-border)',
+                    backgroundColor: 'var(--color-surface-elevated)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    color: 'var(--color-text-primary)',
+                    minHeight: '44px',
+                  }}
+                >
+                  <span style={{ color: 'var(--color-secondary)', display: 'flex' }}>
+                    {nightMode ? <Sun size={17} /> : <Moon size={17} />}
+                  </span>
+                  <span style={{ flex: 1 }}>{nightMode ? 'Light Mode' : 'Night Mode'}</span>
+                </button>
+              )}
 
               <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)', margin: '6px 0' }} />
 

@@ -67,6 +67,19 @@ export const ReaderScreen: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
+  const [fitToPage, setFitToPage] = useState<boolean>(false);
+  const [nightMode, setNightMode] = useState<boolean>(
+    () => typeof window !== 'undefined' && localStorage.getItem('kin_reader_night_mode') === '1'
+  );
+  const toggleNightMode = useCallback(() => {
+    setNightMode((v) => {
+      const next = !v;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('kin_reader_night_mode', next ? '1' : '0');
+      }
+      return next;
+    });
+  }, []);
   // Full-screen is the default reading mode on every device; tapping the page centre reveals chrome.
   const [isChromeVisible, setIsChromeVisible] = useState<boolean>(false);
   const [showTapHint, setShowTapHint] = useState<boolean>(
@@ -380,15 +393,18 @@ export const ReaderScreen: React.FC = () => {
         case '+':
         case '=':
           e.preventDefault();
+          setFitToPage(false);
           setZoomScale((z) => Math.min(2.5, z + 0.15));
           break;
         case '-':
         case '_':
           e.preventDefault();
+          setFitToPage(false);
           setZoomScale((z) => Math.max(0.5, z - 0.15));
           break;
         case '0':
           e.preventDefault();
+          setFitToPage(false);
           setZoomScale(1.0);
           break;
         case 'b':
@@ -531,6 +547,8 @@ export const ReaderScreen: React.FC = () => {
             onDeleteAnnotation={deleteAnnotation}
             onLoadSuccess={handleDocumentLoadSuccess}
             isChromeHidden={isChromeHidden}
+            fitToPage={fitToPage}
+            nightMode={nightMode}
             onLeftTap={() => {
               if (showTapHint) dismissTapHint();
               handlePageChange(currentPage - 1);
@@ -596,9 +614,15 @@ export const ReaderScreen: React.FC = () => {
         {isChromeVisible && (
           <ReaderZoomStrip
             zoomScale={zoomScale}
-            onZoomChange={setZoomScale}
-            onFitWidth={() => setZoomScale(1.3)}
-            onFitPage={() => setZoomScale(1.0)}
+            onZoomChange={(scale) => {
+              setFitToPage(false);
+              setZoomScale(scale);
+            }}
+            onFitWidth={() => {
+              setFitToPage(false);
+              setZoomScale(1.0);
+            }}
+            onFitPage={() => setFitToPage(true)}
           />
         )}
 
@@ -628,6 +652,8 @@ export const ReaderScreen: React.FC = () => {
               setToolsOpen(false);
               setPinChooserOpen(true);
             }}
+            nightMode={nightMode}
+            onToggleNightMode={toggleNightMode}
             onClose={() => setToolsOpen(false)}
           />
         )}
