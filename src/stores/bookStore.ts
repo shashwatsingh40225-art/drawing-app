@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { supabase, isSupabaseDemoMode } from '../lib/supabase';
 import { Book } from '../types/book';
 
-const LOCAL_STORAGE_KEY = 'kin_books_cache';
+// Demo studio account only — pre-populated so the demo has something to show.
+const DEMO_STORAGE_KEY = 'kin_books_demo_cache';
+// Real accounts' offline cache of their own synced books — never seeded with demo content.
+const REAL_CACHE_KEY = 'kin_books_cache';
 
 const DEMO_SEED_BOOKS: Book[] = [
   {
@@ -49,11 +52,11 @@ interface BookState {
   getBookById: (id: string) => Book | undefined;
 }
 
-function loadLocalBooks(): Book[] {
+function loadDemoBooks(): Book[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = localStorage.getItem(DEMO_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEMO_SEED_BOOKS));
+      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(DEMO_SEED_BOOKS));
       return DEMO_SEED_BOOKS;
     }
     return JSON.parse(raw);
@@ -62,9 +65,27 @@ function loadLocalBooks(): Book[] {
   }
 }
 
-function saveLocalBooks(books: Book[]) {
+function saveDemoBooks(books: Book[]) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(books));
+    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(books));
+  } catch (err) {
+    console.warn('Could not save demo books to localStorage:', err);
+  }
+}
+
+// Real accounts: read/write their own offline cache only — never seeded with demo content.
+function loadCachedBooks(): Book[] {
+  try {
+    const raw = localStorage.getItem(REAL_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedBooks(books: Book[]) {
+  try {
+    localStorage.setItem(REAL_CACHE_KEY, JSON.stringify(books));
   } catch (err) {
     console.warn('Could not save books to localStorage:', err);
   }
@@ -88,7 +109,7 @@ export const useBookStore = create<BookState>((set, get) => ({
     set({ loading: true, error: null });
 
     if (isDemoArtist()) {
-      const items = loadLocalBooks().filter((b) => !b.deleted_at);
+      const items = loadDemoBooks().filter((b) => !b.deleted_at);
       set({ books: items, loading: false });
       return;
     }
@@ -102,15 +123,15 @@ export const useBookStore = create<BookState>((set, get) => ({
 
       if (error) {
         console.warn('Supabase fetch books failed, using local cache:', error.message);
-        const items = loadLocalBooks().filter((b) => !b.deleted_at);
+        const items = loadCachedBooks().filter((b) => !b.deleted_at);
         set({ books: items, loading: false });
         return;
       }
 
       set({ books: data ?? [], loading: false });
-      saveLocalBooks(data ?? []);
+      saveCachedBooks(data ?? []);
     } catch (err) {
-      const items = loadLocalBooks().filter((b) => !b.deleted_at);
+      const items = loadCachedBooks().filter((b) => !b.deleted_at);
       set({ books: items, loading: false });
     }
   },
@@ -140,8 +161,8 @@ export const useBookStore = create<BookState>((set, get) => ({
         updated_at: now,
         deleted_at: null,
       };
-      const all = [newBook, ...loadLocalBooks()];
-      saveLocalBooks(all);
+      const all = [newBook, ...loadDemoBooks()];
+      saveDemoBooks(all);
       set({ books: [newBook, ...get().books] });
       return newBook;
     }
@@ -158,8 +179,8 @@ export const useBookStore = create<BookState>((set, get) => ({
           updated_at: now,
           deleted_at: null,
         };
-        const all = [newBook, ...loadLocalBooks()];
-        saveLocalBooks(all);
+        const all = [newBook, ...loadCachedBooks()];
+        saveCachedBooks(all);
         set({ books: [newBook, ...get().books] });
         return newBook;
       }
@@ -183,8 +204,8 @@ export const useBookStore = create<BookState>((set, get) => ({
           updated_at: now,
           deleted_at: null,
         };
-        const all = [newBook, ...loadLocalBooks()];
-        saveLocalBooks(all);
+        const all = [newBook, ...loadCachedBooks()];
+        saveCachedBooks(all);
         set({ books: [newBook, ...get().books] });
         return newBook;
       }
@@ -201,8 +222,8 @@ export const useBookStore = create<BookState>((set, get) => ({
         updated_at: now,
         deleted_at: null,
       };
-      const all = [newBook, ...loadLocalBooks()];
-      saveLocalBooks(all);
+      const all = [newBook, ...loadCachedBooks()];
+      saveCachedBooks(all);
       set({ books: [newBook, ...get().books] });
       return newBook;
     }
@@ -212,10 +233,10 @@ export const useBookStore = create<BookState>((set, get) => ({
     const now = new Date().toISOString();
 
     if (isDemoArtist()) {
-      const all = loadLocalBooks().map((b) =>
+      const all = loadDemoBooks().map((b) =>
         b.id === id ? { ...b, ...updates, updated_at: now } : b
       );
-      saveLocalBooks(all);
+      saveDemoBooks(all);
       set({
         books: get().books.map((b) =>
           b.id === id ? { ...b, ...updates, updated_at: now } : b
@@ -232,10 +253,10 @@ export const useBookStore = create<BookState>((set, get) => ({
 
       if (error) {
         console.warn('Supabase update book failed, saving locally:', error.message);
-        const all = loadLocalBooks().map((b) =>
+        const all = loadCachedBooks().map((b) =>
           b.id === id ? { ...b, ...updates, updated_at: now } : b
         );
-        saveLocalBooks(all);
+        saveCachedBooks(all);
       }
 
       set({
@@ -245,10 +266,10 @@ export const useBookStore = create<BookState>((set, get) => ({
       });
     } catch (err) {
       console.warn('Update book error:', err);
-      const all = loadLocalBooks().map((b) =>
+      const all = loadCachedBooks().map((b) =>
         b.id === id ? { ...b, ...updates, updated_at: now } : b
       );
-      saveLocalBooks(all);
+      saveCachedBooks(all);
       set({
         books: get().books.map((b) =>
           b.id === id ? { ...b, ...updates, updated_at: now } : b
@@ -261,10 +282,10 @@ export const useBookStore = create<BookState>((set, get) => ({
     const now = new Date().toISOString();
 
     if (isDemoArtist()) {
-      const all = loadLocalBooks().map((b) =>
+      const all = loadDemoBooks().map((b) =>
         b.id === id ? { ...b, deleted_at: now } : b
       );
-      saveLocalBooks(all);
+      saveDemoBooks(all);
       set({ books: get().books.filter((b) => b.id !== id) });
       return;
     }
@@ -279,27 +300,27 @@ export const useBookStore = create<BookState>((set, get) => ({
         console.warn('Delete book failed on Supabase, updating locally:', error.message);
       }
 
-      const all = loadLocalBooks().map((b) =>
+      const all = loadCachedBooks().map((b) =>
         b.id === id ? { ...b, deleted_at: now } : b
       );
-      saveLocalBooks(all);
+      saveCachedBooks(all);
       set({ books: get().books.filter((b) => b.id !== id) });
     } catch (err) {
       console.warn('Delete book error:', err);
-      const all = loadLocalBooks().map((b) =>
+      const all = loadCachedBooks().map((b) =>
         b.id === id ? { ...b, deleted_at: now } : b
       );
-      saveLocalBooks(all);
+      saveCachedBooks(all);
       set({ books: get().books.filter((b) => b.id !== id) });
     }
   },
 
   restoreBook: async (id) => {
     if (isDemoArtist()) {
-      const all = loadLocalBooks().map((b) =>
+      const all = loadDemoBooks().map((b) =>
         b.id === id ? { ...b, deleted_at: null } : b
       );
-      saveLocalBooks(all);
+      saveDemoBooks(all);
       set({ books: all.filter((b) => !b.deleted_at) });
       return;
     }
@@ -312,10 +333,10 @@ export const useBookStore = create<BookState>((set, get) => ({
       await get().fetchBooks();
     } catch (err) {
       console.warn('Restore book error:', err);
-      const all = loadLocalBooks().map((b) =>
+      const all = loadCachedBooks().map((b) =>
         b.id === id ? { ...b, deleted_at: null } : b
       );
-      saveLocalBooks(all);
+      saveCachedBooks(all);
       set({ books: all.filter((b) => !b.deleted_at) });
     }
   },

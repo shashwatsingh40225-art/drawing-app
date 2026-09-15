@@ -4,7 +4,10 @@ import { supabase, isSupabaseDemoMode } from '../lib/supabase';
 import { Artwork } from '../types/artwork';
 export type { Artwork } from '../types/artwork';
 
-const LOCAL_STORAGE_KEY = 'kin_artworks_cache';
+// Demo studio account only — pre-populated so the demo has something to show.
+const DEMO_STORAGE_KEY = 'kin_artworks_demo_cache';
+// Real accounts' offline cache of their own synced artworks — never seeded with demo content.
+const REAL_CACHE_KEY = 'kin_artworks_cache';
 
 const DEMO_SEED_ARTWORKS: Artwork[] = [
   {
@@ -116,11 +119,11 @@ interface ArtworkState {
   toggleFavorite: (id: string) => Promise<void>;
 }
 
-function loadLocalArtworks(): Artwork[] {
+function loadDemoArtworks(): Artwork[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = localStorage.getItem(DEMO_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEMO_SEED_ARTWORKS));
+      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(DEMO_SEED_ARTWORKS));
       return DEMO_SEED_ARTWORKS;
     }
     return JSON.parse(raw);
@@ -129,9 +132,27 @@ function loadLocalArtworks(): Artwork[] {
   }
 }
 
-function saveLocalArtworks(artworks: Artwork[]) {
+function saveDemoArtworks(artworks: Artwork[]) {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(artworks));
+    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(artworks));
+  } catch (err) {
+    console.warn('Could not save demo artworks to localStorage:', err);
+  }
+}
+
+// Real accounts: read/write their own offline cache only — never seeded with demo content.
+function loadCachedArtworks(): Artwork[] {
+  try {
+    const raw = localStorage.getItem(REAL_CACHE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedArtworks(artworks: Artwork[]) {
+  try {
+    localStorage.setItem(REAL_CACHE_KEY, JSON.stringify(artworks));
   } catch (err) {
     console.warn('Could not save to localStorage:', err);
   }
@@ -177,7 +198,7 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
     const isDemo = isSupabaseDemoMode || !currentUser || currentUser.id.startsWith('demo-');
 
     if (isDemo) {
-      const items = loadLocalArtworks().filter((a) => !a.deleted_at);
+      const items = loadDemoArtworks().filter((a) => !a.deleted_at);
       set({ artworks: items, loading: false });
       return;
     }
@@ -199,7 +220,7 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
 
         if (simpleErr) {
           console.warn('Supabase fetch failed, using local cache:', simpleErr.message);
-          const items = loadLocalArtworks().filter((a) => !a.deleted_at);
+          const items = loadCachedArtworks().filter((a) => !a.deleted_at);
           set({ artworks: items, loading: false });
           return;
         }
@@ -214,7 +235,7 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
 
       set({ artworks: formatted, loading: false });
     } catch (err) {
-      const items = loadLocalArtworks().filter((a) => !a.deleted_at);
+      const items = loadCachedArtworks().filter((a) => !a.deleted_at);
       set({ artworks: items, loading: false });
     }
   },
@@ -235,8 +256,8 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
         updated_at: now,
         deleted_at: null,
       };
-      const all = [newArtwork, ...loadLocalArtworks()];
-      saveLocalArtworks(all);
+      const all = [newArtwork, ...loadDemoArtworks()];
+      saveDemoArtworks(all);
       set({ artworks: [newArtwork, ...get().artworks] });
       return newArtwork;
     }
@@ -261,8 +282,8 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
           updated_at: now,
           deleted_at: null,
         };
-        const all = [newArtwork, ...loadLocalArtworks()];
-        saveLocalArtworks(all);
+        const all = [newArtwork, ...loadCachedArtworks()];
+        saveCachedArtworks(all);
         set({ artworks: [newArtwork, ...get().artworks] });
         return newArtwork;
       }
@@ -297,8 +318,8 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
         updated_at: now,
         deleted_at: null,
       };
-      const all = [newArtwork, ...loadLocalArtworks()];
-      saveLocalArtworks(all);
+      const all = [newArtwork, ...loadCachedArtworks()];
+      saveCachedArtworks(all);
       set({ artworks: [newArtwork, ...get().artworks] });
       return newArtwork;
     }
@@ -308,10 +329,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
     const now = new Date().toISOString();
 
     if (isDemoArtist()) {
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadDemoArtworks().map((a) =>
         a.id === id ? { ...a, ...updates, updated_at: now } : a
       );
-      saveLocalArtworks(all);
+      saveDemoArtworks(all);
       set({
         artworks: get().artworks.map((a) =>
           a.id === id ? { ...a, ...updates, updated_at: now } : a
@@ -329,10 +350,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
 
       if (error) {
         console.warn('Supabase update failed, updating local cache:', error.message);
-        const all = loadLocalArtworks().map((a) =>
+        const all = loadCachedArtworks().map((a) =>
           a.id === id ? { ...a, ...updates, updated_at: now } : a
         );
-        saveLocalArtworks(all);
+        saveCachedArtworks(all);
       }
       set({
         artworks: get().artworks.map((a) =>
@@ -341,10 +362,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
       });
     } catch (err) {
       console.warn('Update failed:', err);
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadCachedArtworks().map((a) =>
         a.id === id ? { ...a, ...updates, updated_at: now } : a
       );
-      saveLocalArtworks(all);
+      saveCachedArtworks(all);
       set({
         artworks: get().artworks.map((a) =>
           a.id === id ? { ...a, ...updates, updated_at: now } : a
@@ -357,10 +378,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
     const deletedAt = new Date().toISOString();
 
     if (isDemoArtist()) {
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadDemoArtworks().map((a) =>
         a.id === id ? { ...a, deleted_at: deletedAt } : a
       );
-      saveLocalArtworks(all);
+      saveDemoArtworks(all);
       set({ artworks: get().artworks.filter((a) => a.id !== id) });
       return;
     }
@@ -374,27 +395,27 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
       if (error) {
         console.warn('Supabase delete failed, deleting from local cache:', error.message);
       }
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadCachedArtworks().map((a) =>
         a.id === id ? { ...a, deleted_at: deletedAt } : a
       );
-      saveLocalArtworks(all);
+      saveCachedArtworks(all);
       set({ artworks: get().artworks.filter((a) => a.id !== id) });
     } catch (err) {
       console.warn('Delete failed:', err);
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadCachedArtworks().map((a) =>
         a.id === id ? { ...a, deleted_at: deletedAt } : a
       );
-      saveLocalArtworks(all);
+      saveCachedArtworks(all);
       set({ artworks: get().artworks.filter((a) => a.id !== id) });
     }
   },
 
   restoreArtwork: async (id) => {
     if (isDemoArtist()) {
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadDemoArtworks().map((a) =>
         a.id === id ? { ...a, deleted_at: null } : a
       );
-      saveLocalArtworks(all);
+      saveDemoArtworks(all);
       const restored = all.find((a) => a.id === id);
       if (restored) {
         set({ artworks: [restored, ...get().artworks] });
@@ -410,10 +431,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
       get().fetchArtworks();
     } catch (err) {
       console.warn('Restore failed:', err);
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadCachedArtworks().map((a) =>
         a.id === id ? { ...a, deleted_at: null } : a
       );
-      saveLocalArtworks(all);
+      saveCachedArtworks(all);
       const restored = all.find((a) => a.id === id);
       if (restored) {
         set({ artworks: [restored, ...get().artworks] });
@@ -428,10 +449,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
     const newFav = !artwork.is_favorite;
 
     if (isDemoArtist()) {
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadDemoArtworks().map((a) =>
         a.id === id ? { ...a, is_favorite: newFav } : a
       );
-      saveLocalArtworks(all);
+      saveDemoArtworks(all);
       set({
         artworks: get().artworks.map((a) =>
           a.id === id ? { ...a, is_favorite: newFav } : a
@@ -449,10 +470,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
       if (error) {
         console.warn('Supabase favorite toggle failed:', error.message);
       }
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadCachedArtworks().map((a) =>
         a.id === id ? { ...a, is_favorite: newFav } : a
       );
-      saveLocalArtworks(all);
+      saveCachedArtworks(all);
       set({
         artworks: get().artworks.map((a) =>
           a.id === id ? { ...a, is_favorite: newFav } : a
@@ -460,10 +481,10 @@ export const useArtworkStore = create<ArtworkState>((set, get) => ({
       });
     } catch (err) {
       console.warn('Favorite toggle failed:', err);
-      const all = loadLocalArtworks().map((a) =>
+      const all = loadCachedArtworks().map((a) =>
         a.id === id ? { ...a, is_favorite: newFav } : a
       );
-      saveLocalArtworks(all);
+      saveCachedArtworks(all);
       set({
         artworks: get().artworks.map((a) =>
           a.id === id ? { ...a, is_favorite: newFav } : a
