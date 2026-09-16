@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
+  List,
   BookmarkCheck,
   Trash2,
   Archive,
@@ -32,6 +33,9 @@ interface ReaderToolsPanelProps {
   hasUnreadRecap?: boolean;
   /** Highest page the reader has reached; corrections cannot extend past it. */
   maxEditablePage?: number;
+  /** One title per section, from the EPUB's table of contents. Present only for EPUB books —
+   *  swaps the "Thumbnails" number grid for a "Chapters" list of real chapter names. */
+  chapterTitles?: string[];
   onSelectPage: (page: number) => void;
   onRemoveBookmark: (id: string) => void;
   onUpdateSessionBoundaries?: (sessionId: string, startPage: number, endPage: number) => Promise<void>;
@@ -73,6 +77,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   generatingSessionIds = {},
   hasUnreadRecap = false,
   maxEditablePage,
+  chapterTitles,
   onSelectPage,
   onRemoveBookmark,
   onUpdateSessionBoundaries,
@@ -111,6 +116,8 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
     typeof window !== 'undefined' &&
     (window.matchMedia?.('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true);
   const showInstallTip = isMobile && !isStandalone;
+  const hasChapters = Boolean(chapterTitles?.length);
+  const headerTitle = view === 'thumbnails' && hasChapters ? 'Chapters' : VIEW_TITLES[view];
 
   return (
     <>
@@ -157,7 +164,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                 <ChevronLeft size={16} />
               </button>
             )}
-            <span>{VIEW_TITLES[view]}</span>
+            <span>{headerTitle}</span>
           </div>
           <button
             type="button"
@@ -173,36 +180,41 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           {view === 'menu' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {MENU_ITEMS.filter((item) => showAddPin || item.view !== 'archive').map((item) => (
-                <button
-                  key={item.view}
-                  type="button"
-                  onClick={() => setView(item.view)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '12px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor: 'var(--color-surface-elevated)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    color: 'var(--color-text-primary)',
-                    minHeight: '44px',
-                    position: 'relative',
-                  }}
-                >
-                  <span style={{ color: item.color, display: 'flex' }}>{item.icon}</span>
-                  <span style={{ flex: 1 }}>{item.label}</span>
-                  {item.view === 'recap' && hasUnreadRecap && (
-                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--color-secondary)' }} />
-                  )}
-                  <ChevronRight size={15} color="var(--color-text-muted)" />
-                </button>
-              ))}
+              {MENU_ITEMS.filter((item) => showAddPin || item.view !== 'archive').map((item) => {
+                const isChaptersItem = item.view === 'thumbnails' && hasChapters;
+                return (
+                  <button
+                    key={item.view}
+                    type="button"
+                    onClick={() => setView(item.view)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '12px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-surface-elevated)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      color: 'var(--color-text-primary)',
+                      minHeight: '44px',
+                      position: 'relative',
+                    }}
+                  >
+                    <span style={{ color: item.color, display: 'flex' }}>
+                      {isChaptersItem ? <List size={17} /> : item.icon}
+                    </span>
+                    <span style={{ flex: 1 }}>{isChaptersItem ? 'Chapters' : item.label}</span>
+                    {item.view === 'recap' && hasUnreadRecap && (
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--color-secondary)' }} />
+                    )}
+                    <ChevronRight size={15} color="var(--color-text-muted)" />
+                  </button>
+                );
+              })}
 
               {onToggleNightMode && (
                 <button
@@ -277,6 +289,56 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                   read with no browser bar at all, like a real app.
                 </div>
               )}
+            </div>
+          ) : view === 'thumbnails' && hasChapters ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {(chapterTitles ?? []).map((title, i) => {
+                const pageNum = i + 1;
+                const isCurrent = pageNum === currentPage;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => onSelectPage(pageNum)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${isCurrent ? 'var(--color-secondary)' : 'var(--color-border)'}`,
+                      backgroundColor: isCurrent ? 'rgba(180, 83, 31, 0.08)' : 'var(--color-surface-elevated)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      minHeight: '44px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: isCurrent ? 'var(--color-secondary)' : 'var(--color-text-muted)',
+                        minWidth: '20px',
+                      }}
+                    >
+                      {pageNum}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        color: isCurrent ? 'var(--color-secondary)' : 'var(--color-text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {title}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : view === 'thumbnails' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>

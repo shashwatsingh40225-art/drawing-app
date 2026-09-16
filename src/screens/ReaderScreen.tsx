@@ -67,6 +67,7 @@ export const ReaderScreen: React.FC = () => {
   const [sessionsReady, setSessionsReady] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
+  const [chapterTitles, setChapterTitles] = useState<string[] | undefined>(undefined);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
   const [fitToPage, setFitToPage] = useState<boolean>(false);
   const [nightMode, setNightMode] = useState<boolean>(
@@ -152,6 +153,7 @@ export const ReaderScreen: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     userNavigatedRef.current = false;
+    setChapterTitles(undefined);
     const saved = getProgress(id);
     const pageParam = parseInt(searchParams.get('page') ?? '', 10);
     if (!isNaN(pageParam) && pageParam >= 1) {
@@ -570,15 +572,15 @@ export const ReaderScreen: React.FC = () => {
             currentPage={currentPage}
             zoomScale={zoomScale}
             onLoadSuccess={handleDocumentLoadSuccess}
+            onChaptersLoaded={setChapterTitles}
             isChromeHidden={isChromeHidden}
             nightMode={nightMode}
+            onPageChange={handlePageChange}
             onLeftTap={() => {
               if (showTapHint) dismissTapHint();
-              handlePageChange(currentPage - 1);
             }}
             onRightTap={() => {
               if (showTapHint) dismissTapHint();
-              handlePageChange(currentPage + 1);
             }}
             onCenterTap={() => {
               if (showTapHint) dismissTapHint();
@@ -688,6 +690,7 @@ export const ReaderScreen: React.FC = () => {
             generatingSessionIds={generatingIds}
             hasUnreadRecap={hasUnreadRecap}
             maxEditablePage={editableLimit}
+            chapterTitles={isEpub ? chapterTitles : undefined}
             onSelectPage={handlePageChange}
             onRemoveBookmark={(bmId) => removeBookmark(bmId)}
             onUpdateSessionBoundaries={async (sessId, sPage, ePage) => {
