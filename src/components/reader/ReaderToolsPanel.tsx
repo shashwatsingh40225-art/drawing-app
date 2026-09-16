@@ -37,6 +37,8 @@ interface ReaderToolsPanelProps {
    *  swaps the "Thumbnails" number grid for a "Chapters" list of real chapter names. */
   chapterTitles?: string[];
   onSelectPage: (page: number) => void;
+  /** Bookmarks may carry a precise in-chapter position (EPUB); falls back to onSelectPage when absent. */
+  onSelectBookmark?: (bookmark: Bookmark) => void;
   onRemoveBookmark: (id: string) => void;
   onUpdateSessionBoundaries?: (sessionId: string, startPage: number, endPage: number) => Promise<void>;
   onRegenerateSessionRecap?: (sessionId: string) => Promise<void>;
@@ -79,6 +81,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   maxEditablePage,
   chapterTitles,
   onSelectPage,
+  onSelectBookmark,
   onRemoveBookmark,
   onUpdateSessionBoundaries,
   onRegenerateSessionRecap,
@@ -299,7 +302,10 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                   <button
                     key={pageNum}
                     type="button"
-                    onClick={() => onSelectPage(pageNum)}
+                    onClick={() => {
+                      onSelectPage(pageNum);
+                      if (isMobile) onClose();
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -350,7 +356,10 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                   <button
                     key={pageNum}
                     type="button"
-                    onClick={() => onSelectPage(pageNum)}
+                    onClick={() => {
+                      onSelectPage(pageNum);
+                      if (isMobile) onClose();
+                    }}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -392,7 +401,11 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                 bookmarks.map((bm) => (
                   <div
                     key={bm.id}
-                    onClick={() => onSelectPage(bm.page_number)}
+                    onClick={() => {
+                      if (onSelectBookmark) onSelectBookmark(bm);
+                      else onSelectPage(bm.page_number);
+                      if (isMobile) onClose();
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',

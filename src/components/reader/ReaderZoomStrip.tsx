@@ -6,13 +6,16 @@ interface ReaderZoomStripProps {
   onZoomChange: (scale: number) => void;
   onFitWidth: () => void;
   onFitPage: () => void;
+  /** "Fit Page" only means something for a fixed-size PDF page image — reflowable EPUB text has
+   *  no page to fit, so the button is hidden rather than shipped as a dead control. */
+  showFitPage?: boolean;
 }
 
 /**
  * Collapsible zoom strip on the right edge — reached for often enough mid-read to want faster
  * access than opening the full Tools panel, so it lives in its own slot outside that group.
  */
-export const ReaderZoomStrip: React.FC<ReaderZoomStripProps> = ({ zoomScale, onZoomChange, onFitWidth, onFitPage }) => {
+export const ReaderZoomStrip: React.FC<ReaderZoomStripProps> = ({ zoomScale, onZoomChange, onFitWidth, onFitPage, showFitPage = true }) => {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -86,23 +89,25 @@ export const ReaderZoomStrip: React.FC<ReaderZoomStripProps> = ({ zoomScale, onZ
           >
             Fit Width
           </button>
-          <button
-            type="button"
-            onClick={onFitPage}
-            style={{
-              fontSize: '0.68rem',
-              fontWeight: 500,
-              padding: '4px 6px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--color-border)',
-              background: 'none',
-              cursor: 'pointer',
-              color: 'var(--color-text-secondary)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Fit Page
-          </button>
+          {showFitPage && (
+            <button
+              type="button"
+              onClick={onFitPage}
+              style={{
+                fontSize: '0.68rem',
+                fontWeight: 500,
+                padding: '4px 6px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--color-border)',
+                background: 'none',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Fit Page
+            </button>
+          )}
         </div>
       )}
       <button

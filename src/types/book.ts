@@ -39,6 +39,9 @@ export interface ReadingProgress {
   reading_mode: 'continuous' | 'paginated';
   started_at: string;
   last_read_at: string;      // ISO datetime
+  /** EPUB only: precise epub.js CFI within current_page's spine section, for exact resume
+   *  (current_page alone is section-granular and would otherwise reopen at the chapter start). */
+  epub_cfi?: string | null;
 }
 
 export type BookmarkColor = 'primary' | 'accent' | 'secondary' | 'muted';
@@ -56,6 +59,9 @@ export interface Bookmark {
   note?: string;             // optional freeform note
   color: BookmarkColor | string;
   created_at: string;        // ISO datetime
+  /** EPUB only: precise epub.js CFI within page_number's spine section. Lets multiple bookmarks
+   *  exist within one chapter instead of clumping onto a single page-number-only bookmark. */
+  epub_cfi?: string | null;
 }
 
 export type AnnotationType = 'note' | 'archive_ref' | 'artwork_ref' | 'page_ref';
@@ -121,6 +127,10 @@ export interface ReadingSession {
   recap_viewed_at: string | null;
   created_at: string;        // ISO datetime
   updated_at: string;        // ISO datetime
+  /** EPUB only: the precise epub.js CFI reached within end_page's spine section, if known.
+   *  Lets the recap spoiler guard stop extraction exactly where the reader stopped instead of
+   *  including the rest of a chapter they never read. */
+  end_cfi?: string | null;
   // Local-only (not database columns)
   recap_error?: string | null;
   recap_error_code?: string | null; // decides whether a failed recap is retried automatically

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, AlertCircle } from 'lucide-react';
-import { validatePDFFile, validateEpubFile, uploadBookFile } from '../../services/bookService';
+import { validatePDFFile, validateEpubFile, uploadBookFile, detectBookFormat } from '../../services/bookService';
 import { useBookStore } from '../../stores/bookStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useToastStore } from '../../stores/toastStore';
@@ -47,7 +47,10 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
     setUploadError(null);
     setStatus('idle');
 
-    const format: BookFormat = file.name.toLowerCase().endsWith('.epub') ? 'epub' : 'pdf';
+    // Sniff the actual content first — a valid PDF/EPUB downloaded or renamed without its
+    // original extension would otherwise be misclassified by filename alone and rejected.
+    const sniffed = await detectBookFormat(file);
+    const format: BookFormat = sniffed ?? (file.name.toLowerCase().endsWith('.epub') ? 'epub' : 'pdf');
     const result = format === 'epub' ? await validateEpubFile(file) : await validatePDFFile(file);
     if (!result.valid) {
       setValidationError(result.error || `Invalid ${format.toUpperCase()} file`);

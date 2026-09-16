@@ -10,12 +10,15 @@ interface BookmarkState {
   loading: boolean;
   fetchBookmarks: (bookId: string) => Promise<void>;
   getBookmarks: (bookId: string) => Bookmark[];
-  isPageBookmarked: (bookId: string, pageNumber: number) => boolean;
+  /** EPUB: pass the current CFI to match a specific in-chapter position rather than the whole
+   *  chapter — omitting it (PDF) matches by page number alone, as before. */
+  isPageBookmarked: (bookId: string, pageNumber: number, epubCfi?: string | null) => boolean;
   addBookmark: (
     bookId: string,
     pageNumber: number,
     label?: string,
-    color?: BookmarkColor | string
+    color?: BookmarkColor | string,
+    epubCfi?: string | null
   ) => Promise<Bookmark | null>;
   removeBookmark: (id: string) => Promise<void>;
   updateBookmark: (id: string, updates: Partial<Bookmark>) => Promise<void>;
@@ -86,13 +89,16 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       .sort((a, b) => a.page_number - b.page_number);
   },
 
-  isPageBookmarked: (bookId: string, pageNumber: number) => {
+  isPageBookmarked: (bookId: string, pageNumber: number, epubCfi?: string | null) => {
     return get().bookmarks.some(
-      (b) => b.book_id === bookId && b.page_number === pageNumber
+      (b) =>
+        b.book_id === bookId &&
+        b.page_number === pageNumber &&
+        (epubCfi ? b.epub_cfi === epubCfi : !b.epub_cfi)
     );
   },
 
-  addBookmark: async (bookId, pageNumber, label = '', color = 'accent') => {
+  addBookmark: async (bookId, pageNumber, label = '', color = 'accent', epubCfi = null) => {
     const now = new Date().toISOString();
     const newId =
       typeof crypto !== 'undefined' && crypto.randomUUID
@@ -110,6 +116,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         label: displayLabel,
         color: color as BookmarkColor,
         created_at: now,
+        epub_cfi: epubCfi,
       };
       const all = [...get().bookmarks, newBm];
       set({ bookmarks: all });
@@ -128,6 +135,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
           label: displayLabel,
           color: color as BookmarkColor,
           created_at: now,
+          epub_cfi: epubCfi,
         };
         const all = [...get().bookmarks, newBm];
         set({ bookmarks: all });
@@ -143,6 +151,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
           page_number: pageNumber,
           label: displayLabel,
           color,
+          epub_cfi: epubCfi,
         })
         .select()
         .single();
@@ -157,6 +166,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
           label: displayLabel,
           color: color as BookmarkColor,
           created_at: now,
+          epub_cfi: epubCfi,
         };
         const all = [...get().bookmarks, newBm];
         set({ bookmarks: all });
@@ -178,6 +188,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         label: displayLabel,
         color: color as BookmarkColor,
         created_at: now,
+        epub_cfi: epubCfi,
       };
       const all = [...get().bookmarks, newBm];
       set({ bookmarks: all });

@@ -1,4 +1,4 @@
-import ePub from 'epubjs';
+import ePub, { EpubCFI } from 'epubjs';
 
 export interface ExtractedPageText {
   pageNumber: number;
@@ -15,8 +15,86 @@ export interface ExtractedRangeResult {
 const MAX_PAGE_CHARS = 8_000;
 const MIN_TOTAL_CHARS = 80;
 
+/** Elements whose boundary should force a line break, so text doesn't fuse across tags like
+ *  `<h1>Title</h1><p>First paragraph.</p>` -> "TitleFirst paragraph.". */
+const BLOCK_TAGS = new Set([
+  'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BR', 'TR', 'TD', 'TH', 'BLOCKQUOTE',
+  'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'UL', 'OL', 'TABLE', 'FIGURE', 'FIGCAPTION', 'DD', 'DT', 'HR',
+]);
+
 function failure(error: string): ExtractedRangeResult {
   return { success: false, pages: [], charCount: 0, error };
+}
+
+/**
+ * Extracts readable prose from a parsed section document: strips `<style>`/`<script>` content
+ * (which `.textContent` otherwise includes verbatim), falls back to `documentElement` for
+ * SVG-rooted spine items (comics/poetry with no `<body>`) instead of returning nothing, and
+ * inserts line breaks at block-element boundaries so adjacent tags don't fuse into one word.
+ * Returns '' for a document the browser's XML parser failed on (a `<parsererror>` node) rather
+ * than forwarding that parser-error text as if it were book content.
+ */
+function extractReadableText(doc: Document): string {
+  if (doc.getElementsByTagName('parsererror').length > 0) return '';
+  const root = doc.body || doc.documentElement;
+  if (!root) return '';
+
+  const clone = root.cloneNode(true) as Element;
+  clone.querySelectorAll('style, script').forEach((el) => el.remove());
+
+  const walker = doc.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
+  const blockEls: Element[] = [];
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (BLOCK_TAGS.has((node as Element).tagName)) blockEls.push(node as Element);
+  }
+  for (const el of blockEls) el.insertAdjacentText('beforebegin', '\n');
+
+  return clone.textContent || '';
+}
+
+/**
+ * Extracts text only up to a CFI position within a section — used to cut the final section of a
+ * recap range off exactly where the reader stopped, instead of including the rest of the chapter
+ * they never read. Returns null (caller falls back to the full section) if the CFI doesn't
+ * resolve against this document.
+ */
+function extractTextUpToCfi(doc: Document, cfiStr: string): string | null {
+  let range: Range;
+  try {
+    range = new EpubCFI(cfiStr).toRange(doc);
+  } catch {
+    return null;
+  }
+  if (!range) return null;
+
+  const root = doc.body || doc.documentElement;
+  if (!root) return null;
+
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(n: Node) {
+      const parent = n.parentElement;
+      if (parent && (parent.tagName === 'STYLE' || parent.tagName === 'SCRIPT')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  let result = '';
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    if (node === range.endContainer) {
+      result += (node.textContent || '').slice(0, range.endOffset);
+      break;
+    }
+    const position = node.compareDocumentPosition(range.endContainer);
+    // eslint-disable-next-line no-bitwise
+    if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+      result += node.textContent || '';
+    } else {
+      break;
+    }
+  }
+  return result;
 }
 
 /**
@@ -30,7 +108,13 @@ function failure(error: string): ExtractedRangeResult {
  * full text of the last page even if the reader stopped partway down it) is that a very long
  * final chapter is included in full even if the reader only read part of it.
  */
-export async function extractEpubTextRange(fileUrl: string, startSection: number, endSection: number): Promise<ExtractedRangeResult> {
+export async function extractEpubTextRange(
+  fileUrl: string,
+  startSection: number,
+  endSection: number,
+  /** Precise stop position within endSection, if known — see extractTextUpToCfi. */
+  endCfi?: string | null
+): Promise<ExtractedRangeResult> {
   if (!Number.isInteger(startSection) || !Number.isInteger(endSection) || startSection < 1 || endSection < startSection) {
     return failure('Invalid section range.');
   }
@@ -64,7 +148,12 @@ export async function extractEpubTextRange(fileUrl: string, startSection: number
       if (!section) continue;
       try {
         const doc: Document = await section.load(book.load.bind(book));
-        const text = (doc.body?.textContent || '')
+        let raw: string | null = null;
+        if (sectionNumber === lastSection && endCfi) {
+          raw = extractTextUpToCfi(doc, endCfi);
+        }
+        if (raw === null) raw = extractReadableText(doc);
+        const text = raw
           .replace(/[ \t]+/g, ' ')
           .replace(/\n\s*\n+/g, '\n')
           .trim()

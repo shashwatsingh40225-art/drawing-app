@@ -17,7 +17,8 @@ interface ReadingProgressState {
     totalPages?: number | null,
     scrollPosition?: number,
     zoomLevel?: number,
-    readingMode?: 'continuous' | 'paginated'
+    readingMode?: 'continuous' | 'paginated',
+    epubCfi?: string | null
   ) => Promise<void>;
   /** Send any pending server writes now (app backgrounded, reader closed). */
   flushProgress: () => void;
@@ -58,6 +59,7 @@ async function upsertRemoteProgress(record: ReadingProgress) {
         zoom_level: record.zoom_level,
         reading_mode: record.reading_mode,
         last_read_at: record.last_read_at,
+        epub_cfi: record.epub_cfi ?? null,
       },
       { onConflict: 'user_id,book_id' }
     );
@@ -115,7 +117,7 @@ export const useReadingProgressStore = create<ReadingProgressState>((set, get) =
     }
   },
 
-  saveProgress: async (bookId, currentPage, totalPages, scrollPosition = 0, zoomLevel = 1.0, readingMode = 'continuous') => {
+  saveProgress: async (bookId, currentPage, totalPages, scrollPosition = 0, zoomLevel = 1.0, readingMode = 'continuous', epubCfi) => {
     const now = new Date().toISOString();
     const existing = get().progressByBookId[bookId];
     const progressRecord: ReadingProgress = {
@@ -129,6 +131,7 @@ export const useReadingProgressStore = create<ReadingProgressState>((set, get) =
       reading_mode: readingMode,
       started_at: existing?.started_at || now,
       last_read_at: now,
+      epub_cfi: epubCfi !== undefined ? epubCfi : (existing?.epub_cfi ?? null),
     };
 
     const nextMap = {

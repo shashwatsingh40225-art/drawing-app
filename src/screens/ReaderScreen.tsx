@@ -17,14 +17,14 @@ import { ReaderZoomStrip } from '../components/reader/ReaderZoomStrip';
 import { ReaderToolsPanel } from '../components/reader/ReaderToolsPanel';
 import { AddPinChooser } from '../components/reader/AddPinChooser';
 import { ReaderViewport } from '../components/reader/ReaderViewport';
-import { EpubViewport } from '../components/reader/EpubViewport';
+import { EpubViewport, EpubViewportHandle } from '../components/reader/EpubViewport';
 import { ReadingProgressBar } from '../components/reader/ReadingProgressBar';
 import { MemoryBridgeCard } from '../components/reader/MemoryBridgeCard';
 import { PendingPin } from '../components/reader/AnnotationOverlay';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ConcentricPortal } from '../components/ConcentricPortal';
 import { KIN_ARCHIVE_BY_ID } from '../data/kinArchive';
-import { Book, ReadingSession } from '../types/book';
+import { Book, Bookmark, ReadingSession } from '../types/book';
 
 const NO_SESSIONS: ReadingSession[] = [];
 
@@ -68,6 +68,13 @@ export const ReaderScreen: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [chapterTitles, setChapterTitles] = useState<string[] | undefined>(undefined);
+  // EPUB only: precise position within currentPage's spine section. `epubNav.cfi` paired with
+  // `epubNav.token` requests a jump to that exact position (see EpubViewport's targetCfi/navToken);
+  // `currentCfi` mirrors the live position as the reader moves, for progress-saving and bookmarks.
+  const [epubNav, setEpubNav] = useState<{ token: number; cfi: string | null }>({ token: 0, cfi: null });
+  const [currentCfi, setCurrentCfi] = useState<string | null>(null);
+  const epubViewportRef = useRef<EpubViewportHandle>(null);
+  const lastCfiForPageRef = useRef<{ page: number; cfi: string } | null>(null);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
   const [fitToPage, setFitToPage] = useState<boolean>(false);
   const [nightMode, setNightMode] = useState<boolean>(
@@ -156,11 +163,14 @@ export const ReaderScreen: React.FC = () => {
     setChapterTitles(undefined);
     const saved = getProgress(id);
     const pageParam = parseInt(searchParams.get('page') ?? '', 10);
-    if (!isNaN(pageParam) && pageParam >= 1) {
+    const hasPageParam = !isNaN(pageParam) && pageParam >= 1;
+    if (hasPageParam) {
       setCurrentPage(pageParam);
     } else {
       setCurrentPage(saved?.current_page || 1);
     }
+    setCurrentCfi(hasPageParam ? null : saved?.epub_cfi ?? null);
+    setEpubNav({ token: 0, cfi: hasPageParam ? null : saved?.epub_cfi ?? null });
     if (saved?.zoom_level) setZoomScale(saved.zoom_level);
     const knownTotal = saved?.total_pages || getBookById(id)?.page_count;
     if (knownTotal) setTotalPages(knownTotal);
@@ -178,6 +188,8 @@ export const ReaderScreen: React.FC = () => {
       fetchProgress(id).then((serverProgress) => {
         if (!active || !serverProgress || userNavigatedRef.current || searchParams.get('page')) return;
         setCurrentPage(serverProgress.current_page);
+        setCurrentCfi(serverProgress.epub_cfi ?? null);
+        setEpubNav({ token: 0, cfi: serverProgress.epub_cfi ?? null });
       });
       fetchBookmarks(id);
       fetchAnnotations(id);
@@ -224,7 +236,8 @@ export const ReaderScreen: React.FC = () => {
   // 4. Reading sessions — inferred automatically while the document is on screen.
   const handleSessionClosed = useCallback(
     (draft: SessionDraft, reason: SessionCloseReason) => {
-      const saved = saveFinishedSession(draft);
+      const cfiForEnd = lastCfiForPageRef.current?.page === draft.endPage ? lastCfiForPageRef.current.cfi : null;
+      const saved = saveFinishedSession(draft, cfiForEnd);
       if (!saved.is_meaningful) return;
 
       if ((reason === 'break' || reason === 'recovered') && draft.bookId === id) {
@@ -295,18 +308,38 @@ export const ReaderScreen: React.FC = () => {
     [bookSessions, markRecapViewed]
   );
 
-  // 6. Change page (local save is immediate, the server write is debounced in the store)
+  // 6. Change page (local save is immediate, the server write is debounced in the store).
+  // `cfi` (EPUB only): omit it entirely for an internal, section-crossing page report (epub.js
+  // already tracks the precise position via onLocationChange below) — pass null explicitly for
+  // an external jump to a section's start (chapter select), or a string for a precise position
+  // (a bookmark that carries one).
   const handlePageChange = useCallback(
-    (targetPage: number) => {
+    (targetPage: number, cfi?: string | null) => {
       const clamped = Math.max(1, Math.min(totalPages || 1, targetPage));
       userNavigatedRef.current = true;
       setCurrentPage(clamped);
+      if (cfi !== undefined) {
+        setCurrentCfi(cfi);
+        setEpubNav((n) => ({ token: n.token + 1, cfi }));
+      }
       if (bridgeSessionIdRef.current) closeBridge('page-turn');
       if (id) {
-        saveProgress(id, clamped, totalPages, 0, zoomScale);
+        saveProgress(id, clamped, totalPages, 0, zoomScale, undefined, cfi);
       }
     },
     [id, totalPages, zoomScale, saveProgress, closeBridge]
+  );
+
+  // Precise, live position as the reader moves through an EPUB (every relocation, not just
+  // section crossings) — keeps resume position and the recap spoiler guard accurate to the
+  // on-screen location instead of only the chapter.
+  const handleEpubLocationChange = useCallback(
+    (cfi: string, page: number) => {
+      setCurrentCfi(cfi);
+      lastCfiForPageRef.current = { page, cfi };
+      if (id) saveProgress(id, page, totalPages, 0, zoomScale, undefined, cfi);
+    },
+    [id, totalPages, zoomScale, saveProgress]
   );
 
   const handleUpdateBoundaries = useCallback(
@@ -354,21 +387,25 @@ export const ReaderScreen: React.FC = () => {
     }
   };
 
-  // 8. Bookmark toggle
+  // 8. Bookmark toggle. EPUB: keyed on the precise on-screen CFI, not just the chapter, so
+  // multiple screens within one chapter can each be bookmarked independently.
   const handleToggleBookmark = useCallback(async () => {
     if (!id) return;
-    const isBookmarked = isPageBookmarked(id, currentPage);
+    const cfi = isEpub ? currentCfi : null;
+    const isBookmarked = isPageBookmarked(id, currentPage, cfi);
     if (isBookmarked) {
-      const bm = bookmarks.find((b) => b.book_id === id && b.page_number === currentPage);
+      const bm = bookmarks.find(
+        (b) => b.book_id === id && b.page_number === currentPage && (cfi ? b.epub_cfi === cfi : !b.epub_cfi)
+      );
       if (bm) {
         await removeBookmark(bm.id);
         showToast({ type: 'info', message: `Bookmark on page ${currentPage} removed` });
       }
     } else {
-      await addBookmark(id, currentPage, `Page ${currentPage} study note`);
+      await addBookmark(id, currentPage, `Page ${currentPage} study note`, undefined, cfi);
       showToast({ type: 'success', message: `Page ${currentPage} bookmarked` });
     }
-  }, [id, currentPage, isPageBookmarked, bookmarks, removeBookmark, addBookmark, showToast]);
+  }, [id, currentPage, isEpub, currentCfi, isPageBookmarked, bookmarks, removeBookmark, addBookmark, showToast]);
 
   // 9. Place the pending pin (note or archive reference) at a tapped point on the page
   const handlePlacePin = useCallback(
@@ -404,7 +441,49 @@ export const ReaderScreen: React.FC = () => {
     [id, currentPage, pendingPin, addAnnotation, showToast]
   );
 
-  // 11. Keyboard shortcuts
+  // 11. Keyboard shortcuts. Extracted so the same non-navigation commands (zoom, bookmark,
+  // escape) can also be reached from EpubViewport's own keydown listener — a window-level
+  // listener here never sees a keydown that landed inside the book's iframe (a separate browsing
+  // context), so without forwarding, those shortcuts would be dead whenever the book itself has
+  // focus rather than the surrounding chrome.
+  const handleReaderKeyCommand = useCallback(
+    (key: string) => {
+      switch (key) {
+        case '+':
+        case '=':
+          setFitToPage(false);
+          setZoomScale((z) => Math.min(2.5, z + 0.15));
+          break;
+        case '-':
+        case '_':
+          setFitToPage(false);
+          setZoomScale((z) => Math.max(0.5, z - 0.15));
+          break;
+        case '0':
+          setFitToPage(false);
+          setZoomScale(1.0);
+          break;
+        case 'b':
+        case 'B':
+          void handleToggleBookmark();
+          break;
+        case 'Escape':
+          if (bridgeSessionIdRef.current) {
+            closeBridge('explicit');
+          } else if (pinChooserOpen || pendingPin) {
+            setPinChooserOpen(false);
+            setPendingPin(null);
+          } else if (toolsOpen) {
+            setToolsOpen(false);
+          }
+          break;
+        default:
+          break;
+      }
+    },
+    [handleToggleBookmark, pinChooserOpen, pendingPin, toolsOpen, closeBridge]
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't intercept if user is typing in an input
@@ -416,47 +495,27 @@ export const ReaderScreen: React.FC = () => {
         case 'ArrowLeft':
         case 'PageUp':
           e.preventDefault();
-          handlePageChange(currentPage - 1);
+          // EPUB: turn exactly one on-screen page, like the book's own iframe keyboard handler —
+          // handlePageChange would jump a whole spine section (chapter) instead.
+          if (isEpub) epubViewportRef.current?.prev();
+          else handlePageChange(currentPage - 1);
           break;
         case 'ArrowRight':
         case 'PageDown':
           e.preventDefault();
-          handlePageChange(currentPage + 1);
+          if (isEpub) epubViewportRef.current?.next();
+          else handlePageChange(currentPage + 1);
           break;
         case '+':
         case '=':
-          e.preventDefault();
-          setFitToPage(false);
-          setZoomScale((z) => Math.min(2.5, z + 0.15));
-          break;
         case '-':
         case '_':
-          e.preventDefault();
-          setFitToPage(false);
-          setZoomScale((z) => Math.max(0.5, z - 0.15));
-          break;
         case '0':
-          e.preventDefault();
-          setFitToPage(false);
-          setZoomScale(1.0);
-          break;
         case 'b':
         case 'B':
-          e.preventDefault();
-          void handleToggleBookmark();
-          break;
         case 'Escape':
-          if (bridgeSessionIdRef.current) {
-            e.preventDefault();
-            closeBridge('explicit');
-          } else if (pinChooserOpen || pendingPin) {
-            e.preventDefault();
-            setPinChooserOpen(false);
-            setPendingPin(null);
-          } else if (toolsOpen) {
-            e.preventDefault();
-            setToolsOpen(false);
-          }
+          e.preventDefault();
+          handleReaderKeyCommand(e.key);
           break;
         default:
           break;
@@ -465,7 +524,7 @@ export const ReaderScreen: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPage, handlePageChange, handleToggleBookmark, pinChooserOpen, pendingPin, toolsOpen, closeBridge]);
+  }, [currentPage, handlePageChange, isEpub, handleReaderKeyCommand]);
 
   const swipeHandlers = useSwipeGesture({
     onSwipeLeft: () => {
@@ -495,7 +554,7 @@ export const ReaderScreen: React.FC = () => {
     );
   }
 
-  const bookmarked = id ? isPageBookmarked(id, currentPage) : false;
+  const bookmarked = id ? isPageBookmarked(id, currentPage, isEpub ? currentCfi : null) : false;
   const hasUnreadRecap = bookSessions.some((s) => s.is_meaningful && s.recap && !s.recap_viewed_at);
   const isChromeHidden = !isChromeVisible;
 
@@ -506,7 +565,9 @@ export const ReaderScreen: React.FC = () => {
         flexDirection: 'column',
         position: isChromeHidden ? 'fixed' : 'relative',
         inset: isChromeHidden ? 0 : 'auto',
-        height: '100vh',
+        // 100vh includes the area a mobile browser's retractable address/nav bar can cover;
+        // 100dvh tracks the actual visible viewport (supported by all current browsers).
+        height: '100dvh',
         zIndex: isChromeHidden ? 9999 : 'auto',
         backgroundColor: 'var(--color-background)',
         overflow: 'hidden',
@@ -568,14 +629,20 @@ export const ReaderScreen: React.FC = () => {
           </div>
         ) : isEpub ? (
           <EpubViewport
+            ref={epubViewportRef}
             fileUrl={pdfUrl}
             currentPage={currentPage}
+            targetCfi={epubNav.cfi}
+            navToken={epubNav.token}
             zoomScale={zoomScale}
             onLoadSuccess={handleDocumentLoadSuccess}
             onChaptersLoaded={setChapterTitles}
             isChromeHidden={isChromeHidden}
             nightMode={nightMode}
             onPageChange={handlePageChange}
+            onLocationChange={handleEpubLocationChange}
+            onActivity={() => window.dispatchEvent(new Event('touchstart'))}
+            onKeyCommand={handleReaderKeyCommand}
             onLeftTap={() => {
               if (showTapHint) dismissTapHint();
             }}
@@ -677,6 +744,7 @@ export const ReaderScreen: React.FC = () => {
               setZoomScale(1.0);
             }}
             onFitPage={() => setFitToPage(true)}
+            showFitPage={!isEpub}
           />
         )}
 
@@ -691,7 +759,8 @@ export const ReaderScreen: React.FC = () => {
             hasUnreadRecap={hasUnreadRecap}
             maxEditablePage={editableLimit}
             chapterTitles={isEpub ? chapterTitles : undefined}
-            onSelectPage={handlePageChange}
+            onSelectPage={(page) => handlePageChange(page, isEpub ? null : undefined)}
+            onSelectBookmark={(bm: Bookmark) => handlePageChange(bm.page_number, bm.epub_cfi ?? null)}
             onRemoveBookmark={(bmId) => removeBookmark(bmId)}
             onUpdateSessionBoundaries={async (sessId, sPage, ePage) => {
               if (await handleUpdateBoundaries(sessId, sPage, ePage)) {

@@ -12,7 +12,7 @@ import { BookFormat } from '../types/book';
 const LOCAL_STORAGE_KEY = 'kin_reading_sessions_cache';
 
 const REMOTE_COLUMNS =
-  'id,user_id,book_id,started_at,ended_at,start_page,end_page,duration_seconds,pages_read,is_meaningful,recap,recap_generated_at,recap_viewed_at,created_at,updated_at';
+  'id,user_id,book_id,started_at,ended_at,start_page,end_page,duration_seconds,pages_read,is_meaningful,recap,recap_generated_at,recap_viewed_at,end_cfi,created_at,updated_at';
 
 export interface RecapBookSource {
   filePath: string;
@@ -29,8 +29,9 @@ interface ReadingSessionState {
 
   fetchSessions: (bookId: string) => Promise<ReadingSession[]>;
   getFrontier: (bookId: string) => number;
-  /** Records a finished session. Local persistence is synchronous; the remote write follows. */
-  saveFinishedSession: (draft: SessionDraft) => ReadingSession;
+  /** Records a finished session. Local persistence is synchronous; the remote write follows.
+   *  `endCfi` (EPUB only): the precise position reached within end_page, for the recap spoiler guard. */
+  saveFinishedSession: (draft: SessionDraft, endCfi?: string | null) => ReadingSession;
   /** Manual correction. Clamped to [1, maxPage]; a changed range invalidates the recap. */
   updateSessionBoundaries: (sessionId: string, startPage: number, endPage: number, maxPage: number) => Promise<ReadingSession | null>;
   generateRecap: (sessionId: string, book: RecapBookSource, options?: { force?: boolean }) => Promise<RecapOutcome>;
@@ -78,6 +79,7 @@ function toRemoteRow(s: ReadingSession, userId: string) {
     recap: s.recap,
     recap_generated_at: s.recap_generated_at,
     recap_viewed_at: s.recap_viewed_at,
+    end_cfi: s.end_cfi ?? null,
     updated_at: s.updated_at,
   };
 }
@@ -165,6 +167,7 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
             recap: row.recap ?? (sameRange ? mine.recap : null),
             recap_generated_at: row.recap_generated_at ?? (sameRange ? mine.recap_generated_at : null),
             recap_viewed_at: row.recap_viewed_at ?? mine?.recap_viewed_at ?? null,
+            end_cfi: row.end_cfi ?? (sameRange ? mine.end_cfi : null) ?? null,
             recap_error: sameRange ? mine.recap_error ?? null : null,
             recap_error_code: sameRange ? mine.recap_error_code ?? null : null,
             sync_pending: false,
@@ -181,7 +184,7 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
 
     getFrontier: (bookId) => computeFrontier(get().sessionsByBookId[bookId] ?? []),
 
-    saveFinishedSession: (draft) => {
+    saveFinishedSession: (draft, endCfi = null) => {
       const now = new Date().toISOString();
       const live = isLiveUser();
       const existing = find(draft.id);
@@ -201,6 +204,7 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         recap: rangeUnchanged ? existing.recap : null,
         recap_generated_at: rangeUnchanged ? existing.recap_generated_at : null,
         recap_viewed_at: rangeUnchanged ? existing.recap_viewed_at : null,
+        end_cfi: endCfi ?? (rangeUnchanged ? existing.end_cfi ?? null : null),
         recap_error: null,
         recap_error_code: null,
         created_at: existing?.created_at ?? now,
@@ -232,6 +236,8 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         recap: null,
         recap_generated_at: null,
         recap_viewed_at: null,
+        // A manually corrected end page no longer matches wherever end_cfi pointed.
+        end_cfi: null,
         recap_error: null,
         recap_error_code: null,
         updated_at: now,
@@ -297,7 +303,7 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         let extraction;
         try {
           extraction = book.format === 'epub'
-            ? await extractEpubTextRange(fileUrl, range.startPage, range.endPage)
+            ? await extractEpubTextRange(fileUrl, range.startPage, range.endPage, range.endPage === end_page ? session.end_cfi : null)
             : await extractPdfTextRange(fileUrl, range.startPage, range.endPage);
         } finally {
           if (fileUrl.startsWith('blob:') && fileUrl !== book.filePath) URL.revokeObjectURL(fileUrl);

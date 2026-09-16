@@ -88,12 +88,39 @@ export async function validateEpubFile(file: File): Promise<PDFValidationResult>
   }
 
   try {
-    const slice = file.slice(0, Math.min(file.size, 256));
+    // Read a generous prefix (well beyond any realistic ZIP "extra field") so the local file
+    // header's declared name/extra-field lengths can be trusted instead of hoping the whole
+    // "mimetype" entry lands inside a small fixed-size slice.
+    const PREFIX_BYTES = 8192;
+    const slice = file.slice(0, Math.min(file.size, PREFIX_BYTES));
     const buffer = new Uint8Array(await slice.arrayBuffer());
     const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
     if (!isZip) {
       return { valid: false, error: 'File does not appear to be a valid EPUB document' };
     }
+
+    if (buffer.length >= 30) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const compressionMethod = view.getUint16(8, true);
+      const compressedSize = view.getUint32(18, true);
+      const nameLength = view.getUint16(26, true);
+      const extraLength = view.getUint16(28, true);
+      const nameStart = 30;
+      const nameEnd = nameStart + nameLength;
+      const dataStart = nameEnd + extraLength;
+      const dataEnd = dataStart + compressedSize;
+      if (nameEnd <= buffer.length && dataEnd <= buffer.length) {
+        const entryName = new TextDecoder('ascii').decode(buffer.slice(nameStart, nameEnd));
+        if (entryName === 'mimetype' && compressionMethod === 0) {
+          const content = new TextDecoder('ascii').decode(buffer.slice(dataStart, dataEnd)).trim();
+          if (content === 'application/epub+zip') return { valid: true };
+          return { valid: false, error: 'File does not appear to be a valid EPUB document' };
+        }
+      }
+    }
+
+    // Non-standard layout (or the header didn't fully fit in the read prefix): fall back to a
+    // broad substring scan rather than rejecting a file that may still be a valid EPUB.
     const header = new TextDecoder('latin1').decode(buffer);
     if (!header.includes('mimetype') || !header.includes('application/epub+zip')) {
       return { valid: false, error: 'File does not appear to be a valid EPUB document' };
@@ -103,6 +130,30 @@ export async function validateEpubFile(file: File): Promise<PDFValidationResult>
   }
 
   return { valid: true };
+}
+
+/**
+ * Sniffs a file's actual format from its content (magic bytes), independent of filename.
+ * Used to correctly classify a valid PDF/EPUB that was renamed or downloaded without its
+ * original extension, instead of trusting `.pdf`/`.epub` alone. Returns null when the content
+ * doesn't clearly match either format, so the caller can fall back to the filename.
+ */
+export async function detectBookFormat(file: File): Promise<BookFormat | null> {
+  try {
+    const slice = file.slice(0, Math.min(file.size, 8192));
+    const buffer = new Uint8Array(await slice.arrayBuffer());
+    if (buffer.length >= 5 && new TextDecoder('latin1').decode(buffer.slice(0, 5)) === '%PDF-') {
+      return 'pdf';
+    }
+    const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+    if (isZip) {
+      const header = new TextDecoder('latin1').decode(buffer);
+      if (header.includes('application/epub+zip')) return 'epub';
+    }
+  } catch {
+    // Fall through to null — caller decides based on filename.
+  }
+  return null;
 }
 
 const FORMAT_CONTENT_TYPE: Record<BookFormat, string> = {
@@ -134,8 +185,7 @@ export async function uploadBookFile(
     }
     // Save to browser's native IndexedDB so it persists across reloads
     await savePDFToLocalCache(filePath, file);
-    const localUrl = URL.createObjectURL(file);
-    return { filePath, signedUrl: localUrl };
+    return { filePath };
   }
 
   // Live Supabase upload
@@ -154,10 +204,15 @@ export async function uploadBookFile(
       console.warn('Supabase storage upload failed, saving to local cache:', error.message);
       await savePDFToLocalCache(filePath, file);
       if (onProgress) onProgress(100);
-      const localUrl = URL.createObjectURL(file);
-      return { filePath, signedUrl: localUrl };
+      return { filePath };
     }
 
+    if (onProgress) onProgress(60);
+
+    // Also cache locally so the book stays readable offline even after a successful remote
+    // upload — previously only the two failure branches cached locally, so a book uploaded
+    // while online could never be opened offline.
+    await savePDFToLocalCache(filePath, file);
     if (onProgress) onProgress(85);
 
     // Generate signed URL for immediate reading
@@ -175,8 +230,7 @@ export async function uploadBookFile(
     console.warn('Supabase upload exception, saving locally:', err);
     await savePDFToLocalCache(filePath, file);
     if (onProgress) onProgress(100);
-    const localUrl = URL.createObjectURL(file);
-    return { filePath, signedUrl: localUrl };
+    return { filePath };
   }
 }
 
