@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Document, Page } from 'react-pdf';
+import { Document, Page, DocumentProps } from 'react-pdf';
 import { ConcentricPortal } from '../ConcentricPortal';
 import { AnnotationOverlay, PendingPin } from './AnnotationOverlay';
 import { AlertCircle, RefreshCw, BookOpen } from 'lucide-react';
@@ -7,6 +7,19 @@ import { PageAnnotation } from '../../types/book';
 import { useTapZones } from '../../hooks/useTapZones';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+
+// iPadOS's WebKit (this affects Chrome-on-iOS too, since Apple forces every iOS browser onto
+// WebKit) has a long-standing bug where a cross-origin range/streamed fetch of a PDF from an S3
+// -style signed URL (our Supabase storage links) silently stalls or aborts, even though the exact
+// same request works on desktop and Android Chromium. Our books are capped at 25MB, so trading the
+// streaming/range fetch for one plain full-body download avoids that WebKit quirk entirely with no
+// real downside. Declared outside the component so its identity is stable across renders — react-pdf
+// reloads the document whenever this object's reference changes.
+const PDF_LOAD_OPTIONS: DocumentProps['options'] = {
+  disableStream: true,
+  disableAutoFetch: true,
+  disableRange: true,
+};
 
 interface ReaderViewportProps {
   fileUrl: string | null;
@@ -244,6 +257,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
           <Document
             key={reloadKey}
             file={fileUrl}
+            options={PDF_LOAD_OPTIONS}
             onLoadSuccess={handleDocumentSuccess}
             onLoadError={handleDocumentError}
             loading={
