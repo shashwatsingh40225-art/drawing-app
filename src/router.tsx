@@ -68,8 +68,20 @@ export const router = createBrowserRouter([
       // My Library (PDF books)
       { path: 'library', element: <LibraryScreen /> },
       { path: 'library/:id', element: <BookDetailScreen /> },
-      // PDF Reader
-      { path: 'reader/:id', element: <ReaderScreen /> },
+      // PDF Reader — its own boundary so a crash here (e.g. a device-specific PDF-rendering
+      // failure) doesn't take down the whole app shell, and shows the real error for diagnosis.
+      {
+        path: 'reader/:id',
+        element: (
+          <ErrorBoundary
+            fallbackTitle="This book hit a snag"
+            showDetails
+            secondaryAction={{ label: 'Back to Library', href: '/library' }}
+          >
+            <ReaderScreen />
+          </ErrorBoundary>
+        ),
+      },
       // Kin Archive
       { path: 'archive', element: <ArchiveScreen /> },
       // Redirect old /art-room routes to /

@@ -1,8 +1,15 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 interface Props {
   children: ReactNode;
   fallbackTitle?: string;
+  /** Shows the raw error name/message below the copy — useful for diagnosing device-specific
+   *  crashes (e.g. iPad Safari) that are hard to reproduce and can't easily be remote-debugged. */
+  showDetails?: boolean;
+  /** Optional secondary link so a crash doesn't strand the user with only a reload button that
+   *  re-renders the same broken screen. */
+  secondaryAction?: { label: string; href: string };
 }
 
 interface State {
@@ -79,13 +86,42 @@ export class ErrorBoundary extends Component<Props, State> {
           >
             An unexpected error occurred. Your data is safe — try refreshing the page.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="btn-primary double-outline-btn"
-            style={{ padding: '10px 24px', fontSize: '0.9rem' }}
-          >
-            Refresh Page
-          </button>
+          {this.props.showDetails && this.state.error && (
+            <p
+              style={{
+                fontSize: '0.75rem',
+                fontFamily: 'monospace',
+                color: 'var(--color-text-muted)',
+                backgroundColor: 'var(--color-background)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '10px 12px',
+                marginBottom: '24px',
+                textAlign: 'left',
+                wordBreak: 'break-word',
+              }}
+            >
+              {this.state.error.name}: {this.state.error.message}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn-primary double-outline-btn"
+              style={{ padding: '10px 24px', fontSize: '0.9rem' }}
+            >
+              Refresh Page
+            </button>
+            {this.props.secondaryAction && (
+              <Link
+                to={this.props.secondaryAction.href}
+                className="btn-primary double-outline-btn"
+                style={{ padding: '10px 24px', fontSize: '0.9rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              >
+                {this.props.secondaryAction.label}
+              </Link>
+            )}
+          </div>
         </div>
       );
     }
