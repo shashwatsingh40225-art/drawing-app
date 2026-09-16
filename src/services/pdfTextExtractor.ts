@@ -36,9 +36,12 @@ export async function extractPdfTextRange(fileUrl: string, startPage: number, en
 
   const loadingTask = pdfjs.getDocument({
     url: fileUrl,
-    // Only fetch the byte ranges needed for these pages (matters for large books on mobile data).
+    // iPadOS/iOS WebKit silently stalls or throws on a range/streamed fetch of a cross-origin
+    // signed URL (our Supabase storage links) — see ReaderViewport.tsx. Same fix here: one plain
+    // full-body download instead of range requests.
     disableAutoFetch: true,
     disableStream: true,
+    disableRange: true,
     cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
     cMapPacked: true,
   });
