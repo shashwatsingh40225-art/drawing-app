@@ -15,21 +15,43 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  componentStack: string | null;
+  copied: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, componentStack: null, copied: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo);
+    this.setState({ componentStack: errorInfo.componentStack ?? null });
   }
+
+  private detailsText(): string {
+    const { error, componentStack } = this.state;
+    if (!error) return '';
+    const parts = [`${error.name}: ${error.message}`];
+    if (error.stack) parts.push(error.stack);
+    if (componentStack) parts.push(`Component stack:${componentStack}`);
+    return parts.join('\n\n');
+  }
+
+  private handleCopy = () => {
+    navigator.clipboard
+      .writeText(this.detailsText())
+      .then(() => {
+        this.setState({ copied: true });
+        setTimeout(() => this.setState({ copied: false }), 2000);
+      })
+      .catch(() => {});
+  };
 
   render() {
     if (this.state.hasError) {
@@ -87,22 +109,42 @@ export class ErrorBoundary extends Component<Props, State> {
             An unexpected error occurred. Your data is safe — try refreshing the page.
           </p>
           {this.props.showDetails && this.state.error && (
-            <p
-              style={{
-                fontSize: '0.75rem',
-                fontFamily: 'monospace',
-                color: 'var(--color-text-muted)',
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '10px 12px',
-                marginBottom: '24px',
-                textAlign: 'left',
-                wordBreak: 'break-word',
-              }}
-            >
-              {this.state.error.name}: {this.state.error.message}
-            </p>
+            <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+              <pre
+                style={{
+                  fontSize: '0.7rem',
+                  fontFamily: 'monospace',
+                  color: 'var(--color-text-muted)',
+                  backgroundColor: 'var(--color-background)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 12px',
+                  margin: 0,
+                  maxHeight: '200px',
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {this.detailsText()}
+              </pre>
+              <button
+                type="button"
+                onClick={this.handleCopy}
+                style={{
+                  marginTop: '8px',
+                  fontSize: '0.78rem',
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-pill)',
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {this.state.copied ? 'Copied!' : 'Copy error details'}
+              </button>
+            </div>
           )}
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button

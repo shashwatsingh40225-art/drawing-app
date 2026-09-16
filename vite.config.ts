@@ -48,4 +48,9 @@ export default defineConfig(({ mode }) => ({
     port: 5174, // Use 5174 to avoid conflict if 5173 is already running another tab
     open: false,
   },
+  build: {
+    // Lets a minified prod stack trace (e.g. from a device we can't debug live, like an iPad)
+    // be decoded back to real file/line instead of guessing from mangled variable names.
+    sourcemap: true,
+  },
 }));
