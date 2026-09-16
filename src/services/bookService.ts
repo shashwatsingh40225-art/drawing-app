@@ -1,8 +1,10 @@
 import { supabase, isSupabaseDemoMode } from '../lib/supabase';
 import { savePDFToLocalCache, getPDFUrlFromLocalCache, deletePDFFromLocalCache } from '../utils/localPdfCache';
+import { BookFormat } from '../types/book';
 
 const BUCKET_NAME = 'user-books';
 export const MAX_PDF_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
+export const MAX_EPUB_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 
 export interface PDFValidationResult {
   valid: boolean;
@@ -58,16 +60,68 @@ export async function validatePDFFile(file: File): Promise<PDFValidationResult> 
 }
 
 /**
- * Upload a PDF file to Supabase Storage in user-books bucket.
- * In demo mode or offline fallback, stores PDF into IndexedDB and keeps local reference.
+ * Validate that a file is a well-formed EPUB within size constraints.
+ * An EPUB is a ZIP archive (magic bytes 'PK\x03\x04') whose first entry must be an
+ * uncompressed file named "mimetype" containing exactly "application/epub+zip" — this is
+ * required by the EPUB spec, so it doubles as a reliable structural check without needing a
+ * full ZIP parser.
  */
-export async function uploadBookPDF(
+export async function validateEpubFile(file: File): Promise<PDFValidationResult> {
+  if (!file) {
+    return { valid: false, error: 'No file provided' };
+  }
+
+  if (file.size > MAX_EPUB_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `EPUB file exceeds the ${(MAX_EPUB_SIZE_BYTES / (1024 * 1024)).toFixed(0)}MB limit (size: ${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
+    };
+  }
+
+  const isEpubMime = file.type === 'application/epub+zip';
+  const isEpubExt = file.name.toLowerCase().endsWith('.epub');
+  if (!isEpubMime && !isEpubExt) {
+    return {
+      valid: false,
+      error: 'Only EPUB files (.epub) are supported in your library',
+    };
+  }
+
+  try {
+    const slice = file.slice(0, Math.min(file.size, 256));
+    const buffer = new Uint8Array(await slice.arrayBuffer());
+    const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+    if (!isZip) {
+      return { valid: false, error: 'File does not appear to be a valid EPUB document' };
+    }
+    const header = new TextDecoder('latin1').decode(buffer);
+    if (!header.includes('mimetype') || !header.includes('application/epub+zip')) {
+      return { valid: false, error: 'File does not appear to be a valid EPUB document' };
+    }
+  } catch {
+    return { valid: false, error: 'Could not read file header. Please try another file.' };
+  }
+
+  return { valid: true };
+}
+
+const FORMAT_CONTENT_TYPE: Record<BookFormat, string> = {
+  pdf: 'application/pdf',
+  epub: 'application/epub+zip',
+};
+
+/**
+ * Upload a book file (PDF or EPUB) to Supabase Storage in the user-books bucket.
+ * In demo mode or offline fallback, stores the file into IndexedDB and keeps a local reference.
+ */
+export async function uploadBookFile(
   userId: string,
   bookId: string,
   file: File,
+  format: BookFormat,
   onProgress?: (percent: number) => void
 ): Promise<{ filePath: string; signedUrl?: string }> {
-  const filePath = `${userId}/${bookId}/original.pdf`;
+  const filePath = `${userId}/${bookId}/original.${format}`;
   const isDemo = isSupabaseDemoMode || userId.startsWith('demo-');
 
   if (isDemo) {
@@ -91,7 +145,7 @@ export async function uploadBookPDF(
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, file, {
-        contentType: 'application/pdf',
+        contentType: FORMAT_CONTENT_TYPE[format],
         cacheControl: '3600',
         upsert: true,
       });

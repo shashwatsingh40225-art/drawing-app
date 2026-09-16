@@ -71,7 +71,7 @@ export const LibraryScreen: React.FC = () => {
         icon={<Library size={16} />}
         eyebrowLabel="My Library — Kin Studio Collection"
         title="Reference Books & Guides"
-        description="Your private collection of reference PDFs, anatomy guides, art manuals, and study notes. Read and annotate without distractions."
+        description="Your private collection of reference PDFs and EPUBs, anatomy guides, art manuals, and study notes. Read and annotate without distractions."
         action={
           <button
             onClick={() => setShowUploadModal(true)}
@@ -87,7 +87,7 @@ export const LibraryScreen: React.FC = () => {
             }}
           >
             <Plus size={16} />
-            <span>Upload PDF Book</span>
+            <span>Upload Book</span>
           </button>
         }
       />

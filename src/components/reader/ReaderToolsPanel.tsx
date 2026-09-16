@@ -38,6 +38,8 @@ interface ReaderToolsPanelProps {
   onRegenerateSessionRecap?: (sessionId: string) => Promise<void>;
   onDeleteSession?: (sessionId: string) => Promise<void>;
   onStartAddPin: () => void;
+  /** Pins anchor to an x/y point on a rendered page image — meaningless for reflowable EPUB text. */
+  showAddPin?: boolean;
   nightMode?: boolean;
   onToggleNightMode?: () => void;
   onClose: () => void;
@@ -77,6 +79,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   onRegenerateSessionRecap,
   onDeleteSession,
   onStartAddPin,
+  showAddPin = true,
   nightMode = false,
   onToggleNightMode,
   onClose,
@@ -170,7 +173,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           {view === 'menu' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {MENU_ITEMS.map((item) => (
+              {MENU_ITEMS.filter((item) => showAddPin || item.view !== 'archive').map((item) => (
                 <button
                   key={item.view}
                   type="button"
@@ -228,30 +231,34 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                 </button>
               )}
 
-              <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)', margin: '6px 0' }} />
+              {showAddPin && (
+                <>
+                  <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)', margin: '6px 0' }} />
 
-              <button
-                type="button"
-                onClick={onStartAddPin}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '12px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--color-secondary)',
-                  backgroundColor: 'rgba(180, 83, 31, 0.06)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: '0.88rem',
-                  fontWeight: 600,
-                  color: 'var(--color-secondary)',
-                  minHeight: '44px',
-                }}
-              >
-                <Pin size={17} />
-                <span style={{ flex: 1 }}>Add Pin</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={onStartAddPin}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '12px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-secondary)',
+                      backgroundColor: 'rgba(180, 83, 31, 0.06)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      color: 'var(--color-secondary)',
+                      minHeight: '44px',
+                    }}
+                  >
+                    <Pin size={17} />
+                    <span style={{ flex: 1 }}>Add Pin</span>
+                  </button>
+                </>
+              )}
 
               {showInstallTip && (
                 <div

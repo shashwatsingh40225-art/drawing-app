@@ -17,6 +17,7 @@ import { ReaderZoomStrip } from '../components/reader/ReaderZoomStrip';
 import { ReaderToolsPanel } from '../components/reader/ReaderToolsPanel';
 import { AddPinChooser } from '../components/reader/AddPinChooser';
 import { ReaderViewport } from '../components/reader/ReaderViewport';
+import { EpubViewport } from '../components/reader/EpubViewport';
 import { ReadingProgressBar } from '../components/reader/ReadingProgressBar';
 import { MemoryBridgeCard } from '../components/reader/MemoryBridgeCard';
 import { PendingPin } from '../components/reader/AnnotationOverlay';
@@ -28,7 +29,7 @@ import { Book, ReadingSession } from '../types/book';
 const NO_SESSIONS: ReadingSession[] = [];
 
 function recapSource(book: Book): RecapBookSource {
-  return { filePath: book.file_path, title: book.title, author: book.author };
+  return { filePath: book.file_path, title: book.title, author: book.author, format: book.format };
 }
 
 export const ReaderScreen: React.FC = () => {
@@ -136,6 +137,7 @@ export const ReaderScreen: React.FC = () => {
   }, []);
 
   const book = id ? getBookById(id) : undefined;
+  const isEpub = book?.format === 'epub';
   const progress = id ? getProgress(id) : undefined;
   const bookmarks = id ? getBookmarks(id) : [];
   const pageAnnotations = id ? getAnnotationsForPage(id, currentPage) : [];
@@ -562,6 +564,27 @@ export const ReaderScreen: React.FC = () => {
               </button>
             </div>
           </div>
+        ) : isEpub ? (
+          <EpubViewport
+            fileUrl={pdfUrl}
+            currentPage={currentPage}
+            zoomScale={zoomScale}
+            onLoadSuccess={handleDocumentLoadSuccess}
+            isChromeHidden={isChromeHidden}
+            nightMode={nightMode}
+            onLeftTap={() => {
+              if (showTapHint) dismissTapHint();
+              handlePageChange(currentPage - 1);
+            }}
+            onRightTap={() => {
+              if (showTapHint) dismissTapHint();
+              handlePageChange(currentPage + 1);
+            }}
+            onCenterTap={() => {
+              if (showTapHint) dismissTapHint();
+              toggleChromeVisible();
+            }}
+          />
         ) : (
           <ReaderViewport
             fileUrl={pdfUrl}
@@ -681,6 +704,7 @@ export const ReaderScreen: React.FC = () => {
               setToolsOpen(false);
               setPinChooserOpen(true);
             }}
+            showAddPin={!isEpub}
             nightMode={nightMode}
             onToggleNightMode={toggleNightMode}
             onClose={() => setToolsOpen(false)}

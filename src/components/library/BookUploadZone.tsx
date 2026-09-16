@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileText, X, AlertCircle } from 'lucide-react';
-import { validatePDFFile, uploadBookPDF } from '../../services/bookService';
+import { validatePDFFile, validateEpubFile, uploadBookFile } from '../../services/bookService';
 import { useBookStore } from '../../stores/bookStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useToastStore } from '../../stores/toastStore';
 import { UploadProgress } from '../ui/UploadProgress';
-import { Book } from '../../types/book';
+import { Book, BookFormat } from '../../types/book';
 
 interface BookUploadZoneProps {
   onSuccess?: (book: Book) => void;
@@ -20,6 +20,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
 
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<BookFormat>('pdf');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Form fields
@@ -35,7 +36,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
 
   const cleanFilenameToTitle = (filename: string) => {
     return filename
-      .replace(/\.pdf$/i, '')
+      .replace(/\.(pdf|epub)$/i, '')
       .replace(/[-_]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -46,13 +47,15 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
     setUploadError(null);
     setStatus('idle');
 
-    const result = await validatePDFFile(file);
+    const format: BookFormat = file.name.toLowerCase().endsWith('.epub') ? 'epub' : 'pdf';
+    const result = format === 'epub' ? await validateEpubFile(file) : await validatePDFFile(file);
     if (!result.valid) {
-      setValidationError(result.error || 'Invalid PDF file');
+      setValidationError(result.error || `Invalid ${format.toUpperCase()} file`);
       setSelectedFile(null);
       return;
     }
 
+    setSelectedFormat(format);
     setSelectedFile(file);
     setTitle(cleanFilenameToTitle(file.name));
   };
@@ -99,10 +102,11 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
 
     try {
       // 1. Upload to storage
-      const { filePath, signedUrl } = await uploadBookPDF(
+      const { filePath } = await uploadBookFile(
         userId,
         bookId,
         selectedFile,
+        selectedFormat,
         (percent) => setUploadProgress(percent)
       );
 
@@ -121,7 +125,8 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
         description: description.trim(),
         file_path: filePath,
         file_size_bytes: selectedFile.size,
-        page_count: null, // Will be updated on first render in PDF reader
+        format: selectedFormat,
+        page_count: null, // Will be updated on first render in the reader
         cover_thumbnail_path: null,
         tags,
       });
@@ -152,6 +157,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
 
   const resetSelection = () => {
     setSelectedFile(null);
+    setSelectedFormat('pdf');
     setTitle('');
     setAuthor('');
     setDescription('');
@@ -187,7 +193,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
             Upload to Private Library
           </h3>
           <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--color-text-secondary)' }}>
-            Upload reference manuals, anatomy studies, and sketchbook PDFs (max 50MB).
+            Upload reference manuals, anatomy studies, and sketchbook PDFs or EPUBs (max 25MB).
           </p>
         </div>
         {onCancel && (
@@ -248,7 +254,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,application/epub+zip,.epub"
             onChange={handleFileSelect}
             style={{ display: 'none' }}
           />
@@ -275,10 +281,10 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
               marginBottom: '6px',
             }}
           >
-            Drop your PDF here, or click to browse
+            Drop your PDF or EPUB here, or click to browse
           </div>
           <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-            Only valid PDF files up to 50MB are supported. Files remain private to your account.
+            Only valid PDF or EPUB files up to 25MB are supported. Files remain private to your account.
           </p>
         </div>
       ) : (
@@ -304,7 +310,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
                   {selectedFile.name}
                 </div>
                 <div style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)' }}>
-                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · PDF Document
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB · {selectedFormat.toUpperCase()} Document
                 </div>
               </div>
             </div>

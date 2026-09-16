@@ -4,8 +4,10 @@ import { useAuthStore } from './authStore';
 import { ReadingSession } from '../types/book';
 import { SessionDraft, computeFrontier, recapRangeFor } from '../services/readingSessionLogic';
 import { extractPdfTextRange } from '../services/pdfTextExtractor';
+import { extractEpubTextRange } from '../services/epubTextExtractor';
 import { isTransientRecapError, requestSessionRecap, RecapErrorCode } from '../services/geminiRecapService';
 import { getBookSignedUrl } from '../services/bookService';
+import { BookFormat } from '../types/book';
 
 const LOCAL_STORAGE_KEY = 'kin_reading_sessions_cache';
 
@@ -16,6 +18,7 @@ export interface RecapBookSource {
   filePath: string;
   title: string;
   author?: string;
+  format: BookFormat;
 }
 
 export type RecapOutcome = 'ready' | 'skipped' | 'failed';
@@ -293,7 +296,9 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         if (!fileUrl) return fail('network', "Couldn't reach this book's file.");
         let extraction;
         try {
-          extraction = await extractPdfTextRange(fileUrl, range.startPage, range.endPage);
+          extraction = book.format === 'epub'
+            ? await extractEpubTextRange(fileUrl, range.startPage, range.endPage)
+            : await extractPdfTextRange(fileUrl, range.startPage, range.endPage);
         } finally {
           if (fileUrl.startsWith('blob:') && fileUrl !== book.filePath) URL.revokeObjectURL(fileUrl);
         }

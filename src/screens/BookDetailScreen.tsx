@@ -274,7 +274,7 @@ export const BookDetailScreen: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <HardDrive size={15} color="var(--color-secondary)" />
-              <span>{(book.file_size_bytes / (1024 * 1024)).toFixed(2)} MB PDF Document</span>
+              <span>{(book.file_size_bytes / (1024 * 1024)).toFixed(2)} MB {book.format.toUpperCase()} Document</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Calendar size={15} color="var(--color-secondary)" />
@@ -283,7 +283,7 @@ export const BookDetailScreen: React.FC = () => {
             {book.page_count && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FileText size={15} color="var(--color-secondary)" />
-                <span>{book.page_count} Total Pages</span>
+                <span>{book.page_count} {book.format === 'epub' ? 'Sections' : 'Total Pages'}</span>
               </div>
             )}
           </div>

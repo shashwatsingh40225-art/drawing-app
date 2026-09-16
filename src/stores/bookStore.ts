@@ -16,6 +16,7 @@ const DEMO_SEED_BOOKS: Book[] = [
     description: 'Reference handbook on anatomical striation, kinetic gesture lines, and vertebrate silhouette proportions.',
     file_path: '/artist-reference/art-08.jpeg', // Fallback visual for demo preview
     file_size_bytes: 4820000,
+    format: 'pdf',
     page_count: 24,
     cover_thumbnail_path: '/artist-reference/art-08.jpeg',
     tags: ['anatomy', 'gestures', 'reference'],
@@ -31,6 +32,7 @@ const DEMO_SEED_BOOKS: Book[] = [
     description: 'Working sketchbook examining mechanical linkages, insect wings, and organic botanical convergence.',
     file_path: '/artist-reference/art-17.jpeg',
     file_size_bytes: 8190000,
+    format: 'pdf',
     page_count: 48,
     cover_thumbnail_path: '/artist-reference/art-17.jpeg',
     tags: ['clockwork', 'biomechanical', 'sketchbook'],
@@ -147,6 +149,7 @@ export const useBookStore = create<BookState>((set, get) => ({
       description: bookData.description || '',
       file_path: bookData.file_path,
       file_size_bytes: bookData.file_size_bytes,
+      format: bookData.format || 'pdf',
       page_count: bookData.page_count ?? null,
       cover_thumbnail_path: bookData.cover_thumbnail_path ?? null,
       tags: bookData.tags || [],

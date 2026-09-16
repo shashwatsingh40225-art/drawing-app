@@ -1,7 +1,9 @@
+export type BookFormat = 'pdf' | 'epub';
+
 /**
- * Book — a PDF uploaded by the user to their private library.
+ * Book — a PDF or EPUB uploaded by the user to their private library.
  * Stored in Supabase table: books
- * File stored in Supabase Storage: user-books/{user_id}/{book_id}/original.pdf
+ * File stored in Supabase Storage: user-books/{user_id}/{book_id}/original.pdf|.epub
  */
 export interface Book {
   id: string;
@@ -11,7 +13,8 @@ export interface Book {
   description: string;
   file_path: string;        // Supabase Storage path in user-books bucket
   file_size_bytes: number;
-  page_count: number | null; // populated after PDF parse
+  format: BookFormat;
+  page_count: number | null; // PDF: page count. EPUB: spine section (chapter) count.
   cover_thumbnail_path?: string | null;
   cover_image_path?: string | null;
   tags: string[];

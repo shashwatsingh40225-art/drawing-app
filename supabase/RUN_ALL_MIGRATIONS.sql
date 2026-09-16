@@ -523,6 +523,12 @@ CREATE POLICY "Users can delete own reading sessions"
   USING (auth.uid() = user_id);
 
 -- ============================================================
+-- Migration 011: EPUB Support
+-- ============================================================
+ALTER TABLE books
+  ADD COLUMN IF NOT EXISTS format TEXT NOT NULL DEFAULT 'pdf' CHECK (format IN ('pdf', 'epub'));
+
+-- ============================================================
 -- SETUP COMPLETE! All tables, indexes, RLS policies, and storage
 -- buckets are now configured for Kin Studio.
 -- ============================================================
