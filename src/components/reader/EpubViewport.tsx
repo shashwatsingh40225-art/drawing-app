@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import ePub, { Book as EpubBook, Rendition } from 'epubjs';
+import ePub, { Book as EpubBook, Rendition, Contents } from 'epubjs';
 import { ConcentricPortal } from '../ConcentricPortal';
 import { AlertCircle, RefreshCw, BookOpen } from 'lucide-react';
 import { useTapZones } from '../../hooks/useTapZones';
@@ -51,6 +51,16 @@ export const EpubViewport: React.FC<EpubViewportProps> = ({
   const [reloadKey, setReloadKey] = useState(0);
   const tapZoneHandlers = useTapZones({ onLeftTap, onCenterTap, onRightTap });
 
+  // epub.js renders each section into its own iframe, a separate browsing context whose clicks,
+  // touches and keypresses never bubble to the outer div — so useTapZones above only ever sees
+  // taps that land on the padding around the iframe, never on the book text itself. Kept fresh by
+  // a ref since the mount effect below (which wires the iframe-side listeners) only re-runs when
+  // the file changes, not on every render.
+  const handlersRef = useRef({ onLeftTap, onCenterTap, onRightTap });
+  useEffect(() => {
+    handlersRef.current = { onLeftTap, onCenterTap, onRightTap };
+  });
+
   // Open the book and mount the rendition. Re-runs only when the file or an explicit retry changes.
   useEffect(() => {
     if (!fileUrl || !containerRef.current) return;
@@ -99,6 +109,33 @@ export const EpubViewport: React.FC<EpubViewportProps> = ({
         });
         rendition.on('rendered', () => {
           if (!cancelled) setIsLoading(false);
+        });
+
+        // Re-implement tap zones for clicks that land inside the section's iframe (see
+        // handlersRef comment above). epub.js forwards the iframe's native DOM events onto the
+        // rendition itself, `contents` being the Contents wrapper for the iframe that was clicked.
+        rendition.on('click', (event: MouseEvent, contents?: Contents) => {
+          const selection = contents?.window?.getSelection?.();
+          if (selection && selection.toString().trim().length > 0) return;
+          const width = contents?.window?.innerWidth;
+          if (!width) return;
+          const fraction = event.clientX / width;
+          if (fraction < 1 / 3) handlersRef.current.onLeftTap();
+          else if (fraction > 2 / 3) handlersRef.current.onRightTap();
+          else handlersRef.current.onCenterTap();
+        });
+
+        // Same story for the keyboard shortcut in ReaderScreen: its window-level listener only
+        // fires while the outer document has focus, which stops being true the moment the user
+        // clicks into the iframe's content.
+        rendition.on('keydown', (event: KeyboardEvent) => {
+          if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+            event.preventDefault();
+            handlersRef.current.onLeftTap();
+          } else if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+            event.preventDefault();
+            handlersRef.current.onRightTap();
+          }
         });
 
         const target = book.spine.get(Math.max(0, currentPage - 1));
