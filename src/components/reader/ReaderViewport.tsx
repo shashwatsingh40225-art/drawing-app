@@ -321,6 +321,15 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
                 {...(useHeightFit ? { height: fitPageHeight } : { width: effectivePageWidth })}
                 renderTextLayer={true}
                 renderAnnotationLayer={true}
+                // iPad Safari/WebKit throws inside pdf.js's getTextContent() for some PDFs (a
+                // WebKit-specific bug, not something we can fix on our end). react-pdf's default
+                // "suspense" mode treats that as fatal and rethrows it into the nearest React error
+                // boundary, crashing the whole reader. With suspense off, the same failure just
+                // logs a console warning and that page renders without selectable text — the page
+                // itself (the part that actually matters for reading) still shows up fine.
+                suspense={false}
+                onGetTextError={(error) => console.warn('Text layer unavailable for this page:', error)}
+                onRenderTextLayerError={(error) => console.warn('Text layer render failed for this page:', error)}
                 loading={
                   <div style={{ padding: '60px', textAlign: 'center' }}>
                     <ConcentricPortal size={50} />
