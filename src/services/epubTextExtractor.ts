@@ -81,18 +81,30 @@ function extractTextUpToCfi(doc: Document, cfiStr: string): string | null {
 
   let result = '';
   let node: Node | null;
-  while ((node = walker.nextNode())) {
-    if (node === range.endContainer) {
-      result += (node.textContent || '').slice(0, range.endOffset);
-      break;
+  try {
+    while ((node = walker.nextNode())) {
+      if (node === range.endContainer) {
+        result += (node.textContent || '').slice(0, range.endOffset);
+        break;
+      }
+      // `range.endContainer` is frequently an Element (a `<p>` or `<div>`), which this walker
+      // (SHOW_TEXT only) never visits, so it never equals `node` above — `compareDocumentPosition`
+      // against that element then reports DOCUMENT_POSITION_CONTAINS for the element's own text
+      // children, which has no DOCUMENT_POSITION_FOLLOWING bit set, so the very first text node
+      // used to break out immediately and return ''. `comparePoint` instead places this node's
+      // own end directly against the CFI position itself, correctly regardless of what kind of
+      // node that position's container happens to be.
+      const pastEnd = range.comparePoint(node, node.textContent?.length ?? 0) > 0;
+      if (!pastEnd) {
+        result += node.textContent || '';
+      } else {
+        break;
+      }
     }
-    const position = node.compareDocumentPosition(range.endContainer);
-    // eslint-disable-next-line no-bitwise
-    if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
-      result += node.textContent || '';
-    } else {
-      break;
-    }
+  } catch {
+    // comparePoint throws if the CFI resolved a point outside this document's tree — fall back
+    // to the full section rather than returning a silently truncated recap.
+    return null;
   }
   return result;
 }

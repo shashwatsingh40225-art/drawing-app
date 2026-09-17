@@ -327,6 +327,14 @@ export const ReaderScreen: React.FC = () => {
       if (cfi !== undefined) {
         setCurrentCfi(cfi);
         setEpubNav((n) => ({ token: n.token + 1, cfi }));
+      } else {
+        // An internal, section-crossing turn (epub.js already relocated there on its own — see
+        // EpubViewport's 'relocated' handler, which omits `cfi` for exactly this case). Any
+        // previously-requested target CFI (from opening at a saved position, a bookmark, etc.) is
+        // now stale: leaving it set would make EpubViewport's nav effect re-jump to that old
+        // position the moment `currentPage` changes again, permanently trapping the reader on
+        // whichever chapter they first opened the book to.
+        setEpubNav((n) => (n.cfi === null ? n : { ...n, cfi: null }));
       }
       if (bridgeSessionIdRef.current) closeBridge('page-turn');
       if (id) {

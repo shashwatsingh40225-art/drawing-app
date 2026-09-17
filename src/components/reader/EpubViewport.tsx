@@ -4,6 +4,11 @@ import { ConcentricPortal } from '../ConcentricPortal';
 import { AlertCircle, RefreshCw, BookOpen } from 'lucide-react';
 import { useTapZones } from '../../hooks/useTapZones';
 
+// epub.js's bundled RenditionOptions type omits `gap` (a real, documented rendition setting —
+// see layout.js's `calculate(width, height, gap)`), so a plain object literal needs this widened
+// type to pass it through `renderTo` without an excess-property error.
+type EpubRenderOptions = Parameters<EpubBook['renderTo']>[1] & { gap?: number };
+
 export interface EpubViewportHandle {
   /** Turn one on-screen page backward/forward — the single source of truth for turning, used by
    *  the parent when a page-turn is requested from outside this component (e.g. a keyboard
@@ -87,11 +92,18 @@ const TAP_ZONE_MOVE_THRESHOLD = 10;
 const TAP_ZONE_DURATION_THRESHOLD = 400;
 const SWIPE_THRESHOLD = 50;
 const SWIPE_DURATION_MS = 350;
-/** How long to wait for the theme/content hooks to finish on a newly rendered section (via the
- *  'rendered' event) before revealing it anyway — covers same-section turns, which never fire a
- *  fresh 'rendered' event because no new iframe is created. */
-const REVEAL_FALLBACK_MS = 150;
-const RESIZE_DEBOUNCE_MS = 150;
+/** How long to wait for the theme/content hooks to finish on a newly rendered *section crossing*
+ *  (via the 'rendered' event) before revealing it anyway — a safety net only, since a fresh
+ *  section can take anywhere from ~100ms to well over a second to fetch and parse. Generous on
+ *  purpose: firing before 'rendered' shows a flash of unstyled (non-night-mode) content, which is
+ *  worse than a slightly longer fade. Same-section turns never go through animateTurn at all (see
+ *  turnPrev/turnNext), so this only ever gates a real chapter load. */
+const REVEAL_FALLBACK_MS = 1500;
+// Long enough to coalesce a chrome-visibility toggle and the native Fullscreen transition it can
+// trigger (requestImmersive) into a single resize — those two dimension changes don't always land
+// in the same animation frame, and without this a toggle could still cost two destructive
+// iframe resizes back to back instead of one debounced one.
+const RESIZE_DEBOUNCE_MS = 250;
 const COMMAND_KEYS = new Set(['+', '=', '-', '_', '0', 'b', 'B', 'Escape']);
 
 /** Depth-first flatten of the TOC, in document order. Defensive against a missing/malformed
@@ -199,6 +211,13 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     handlersRef.current = { onPageChange, onLocationChange, onIntraSectionProgress, onLeftTap, onCenterTap, onRightTap, onActivity, onKeyCommand };
   });
 
+  // Read inside the iframe's own event listeners (registered once, on file load), which would
+  // otherwise close over the zoomScale from that render forever.
+  const zoomScaleRef = useRef(zoomScale);
+  useEffect(() => {
+    zoomScaleRef.current = zoomScale;
+  }, [zoomScale]);
+
   // The last spine section epub.js told us it's showing, via 'relocated'. Lets the "jump to a
   // specific section" effect below tell an internal, boundary-crossing page turn (already
   // displaying the right thing) apart from an external one (bookmark, resume, chapter select)
@@ -218,6 +237,11 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // that follows — see the click handler's selection check for why 'click' time is too late.
   const selectionAtMouseDownRef = useRef(false);
   const swipeStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // The current section's on-screen pagination as of the last 'relocated' event — lets
+  // turnPrev/turnNext tell whether the next turn will stay inside this section (instant, no fresh
+  // iframe) or cross into a new one (needs the fade — see animateTurn), without waiting for the
+  // turn itself to find out.
+  const lastDisplayedRef = useRef<{ page: number; total: number } | null>(null);
   // Callbacks waiting on the next 'rendered' event (theme/content hooks finished) before it's
   // safe to reveal a section that was just turned to, so night-mode CSS is already applied and a
   // freshly-opened iframe's default white background never flashes through.
@@ -270,13 +294,35 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // The single place turning happens, regardless of source (outer margin tap, iframe tap,
   // iframe keyboard, iframe swipe, or an outer keyboard shortcut via the imperative ref below) —
   // avoids the double-turn bugs that come from multiple independent paths each trying to turn.
+  // Only a turn that crosses into a new spine section goes through animateTurn's fade: epub.js
+  // swaps columns inside the same iframe instantly for an in-section turn (no new DOM, no
+  // 'rendered' event to reveal on), so fading it out and back in adds a ~280ms blink for no
+  // reason. A cross-section turn genuinely needs it — the fresh iframe starts unstyled.
   const turnPrev = () => {
     handlersRef.current.onLeftTap();
-    animateTurn(() => renditionRef.current?.prev());
+    const displayed = lastDisplayedRef.current;
+    if (displayed && displayed.page > 1) {
+      try {
+        void renditionRef.current?.prev();
+      } catch (err) {
+        console.warn('Page turn failed:', err);
+      }
+    } else {
+      animateTurn(() => renditionRef.current?.prev());
+    }
   };
   const turnNext = () => {
     handlersRef.current.onRightTap();
-    animateTurn(() => renditionRef.current?.next());
+    const displayed = lastDisplayedRef.current;
+    if (displayed && displayed.page < displayed.total) {
+      try {
+        void renditionRef.current?.next();
+      } catch (err) {
+        console.warn('Page turn failed:', err);
+      }
+    } else {
+      animateTurn(() => renditionRef.current?.next());
+    }
   };
 
   useImperativeHandle(ref, () => ({ prev: turnPrev, next: turnNext }), []);
@@ -349,8 +395,16 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
           height: '100%',
           flow: 'paginated',
           spread: 'none',
+          // Without this, epub.js defaults to a non-zero inter-column gap (derived from the
+          // viewport width) for the CSS `column-gap` it injects, but scrolls between pages by
+          // the viewport width alone — the two disagree, so the on-screen page and the scroll
+          // position drift further apart on every turn. A fresh iframe's own clientX (used by the
+          // tap-zone handler below) is a position on that same drifting column strip, so the
+          // drift also creeps the center tap zone into a turn zone within a few pages. Forcing
+          // the gap to 0 keeps both in lockstep.
+          gap: 0,
           allowScriptedContent: false,
-        });
+        } as EpubRenderOptions);
         renditionRef.current = rendition;
 
         rendition.themes.register('night', NIGHT_THEME);
@@ -388,6 +442,7 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
             handlersRef.current.onLocationChange?.(location.start.cfi, index + 1);
           }
           if (location.start.displayed) {
+            lastDisplayedRef.current = { page: location.start.displayed.page, total: location.start.displayed.total };
             handlersRef.current.onIntraSectionProgress?.({
               sectionIndex: index,
               sectionCount: spineLengthRef.current,
@@ -477,16 +532,24 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
           const start = swipeStartRef.current;
           swipeStartRef.current = null;
           if (!start || event.touches.length > 0) return;
-          const duration = Date.now() - start.t;
-          if (duration >= SWIPE_DURATION_MS) return;
-          const selection = contents?.window?.getSelection?.();
-          if (selection && selection.toString().trim().length > 0) return;
           const touch = event.changedTouches[0];
           if (!touch) return;
           const dx = touch.clientX - start.x;
           const dy = touch.clientY - start.y;
-          if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
-            suppressNextClickRef.current = true;
+          const isDrag = Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD;
+          // A real drag always ends in a synthetic 'click' at lift-off, no matter how long it
+          // took or which direction it ended up not turning — leaving that click unsuppressed is
+          // what let a slightly slow forward swipe fall through to the tap-zone handler and turn
+          // the page backward instead.
+          if (isDrag) suppressNextClickRef.current = true;
+          // Zoomed in, a horizontal drag pans the enlarged text, not a turn —
+          // matches the zoom check the PDF path applies to its own swipe gesture.
+          if (zoomScaleRef.current > 1) return;
+          const duration = Date.now() - start.t;
+          if (duration >= SWIPE_DURATION_MS) return;
+          const selection = contents?.window?.getSelection?.();
+          if (selection && selection.toString().trim().length > 0) return;
+          if (isDrag) {
             if (dx > 0) turnPrev();
             else turnNext();
           }

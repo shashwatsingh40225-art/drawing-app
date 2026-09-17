@@ -124,16 +124,27 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
 
   return (
     <>
-      {isMobile && (
-        <div
-          onClick={onClose}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchMove={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(36, 19, 41, 0.4)', backdropFilter: 'blur(2px)', zIndex: 999 }}
-          aria-hidden="true"
-        />
-      )}
+      {/* Click-outside-to-close backdrop on every viewport size, not just mobile: on desktop the
+          panel used to sit in-flow (squeezing the book's own container, which for EPUB tore down
+          and re-laid-out epub.js's iframe every time Tools opened) and had no backdrop, so a
+          click meant to dismiss it landed on the book instead and turned a page. Floating the
+          panel here — fixed on every size, never in flex flow — fixes both: the viewport beside
+          it never resizes, and this backdrop now catches that dismiss click before it reaches the
+          book. Desktop's backdrop stays invisible (no scrim) to match its existing look. */}
+      <div
+        onClick={onClose}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: isMobile ? 'rgba(36, 19, 41, 0.4)' : 'transparent',
+          backdropFilter: isMobile ? 'blur(2px)' : 'none',
+          zIndex: 999,
+        }}
+        aria-hidden="true"
+      />
       <div
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
@@ -146,11 +157,11 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
           flexDirection: 'column',
           height: '100%',
           boxShadow: isMobile ? 'var(--shadow-modal)' : 'var(--shadow-subtle)',
-          zIndex: isMobile ? 1000 : 15,
-          position: isMobile ? 'fixed' : 'relative',
-          top: isMobile ? 0 : 'auto',
-          right: isMobile ? 0 : 'auto',
-          bottom: isMobile ? 0 : 'auto',
+          zIndex: 1000,
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
           userSelect: 'none',
         }}
       >
