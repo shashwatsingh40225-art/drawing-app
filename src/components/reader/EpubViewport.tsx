@@ -342,7 +342,11 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     const el = containerRef.current;
     const rendition = renditionRef.current as unknown as { resize?: (w?: number, h?: number) => void } | null;
     if (!el || !rendition?.resize) return;
-    const { width, height } = el.getBoundingClientRect();
+    // Integer pixels (clientWidth/clientHeight), not the fractional getBoundingClientRect —
+    // passing a fractional width here would make epub.js lay its columns out against that
+    // fractional step while the click handler above measures the integer clientWidth, drifting
+    // the two apart the same way a stale getBoundingClientRect read did before (see its comment).
+    const { clientWidth: width, clientHeight: height } = el;
     if (width > 0 && height > 0) rendition.resize(width, height);
   };
 
@@ -481,7 +485,15 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
             selectionAtMouseDownRef.current = false;
             return;
           }
-          const width = containerRef.current?.getBoundingClientRect().width;
+          // Must match the integer width epub.js itself laid columns out against (stage.js sizes
+          // its scroll container from `container.clientWidth`, an integer, and layout.js's
+          // `calculate()` uses that same integer as the page step) — NOT the fractional
+          // `getBoundingClientRect().width` a flex/percentage layout can report (e.g. 812.4px).
+          // Using the fractional value here used to drift the modulo below against the real,
+          // integer page step by a fraction of a pixel per page, and that error is multiplied by
+          // the page index: ~10 pages into a section the accumulated drift was large enough to
+          // flip a dead-center tap into a left/right turn zone.
+          const width = containerRef.current?.clientWidth;
           if (!width) return;
           // The section's iframe is sized to hold every one of its columns side by side (epub.js
           // expands it to `pageCount * pageWidth`, not the on-screen viewport), so `event.clientX`
@@ -659,10 +671,15 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     };
   }, []);
 
-  const topPadding = isChromeHidden ? 'max(10px, env(safe-area-inset-top))' : '24px';
-  const rightPadding = isChromeHidden ? 'max(10px, env(safe-area-inset-right))' : '16px';
-  const bottomPadding = isChromeHidden ? 'max(10px, env(safe-area-inset-bottom))' : '16px';
-  const leftPadding = isChromeHidden ? 'max(10px, env(safe-area-inset-left))' : '16px';
+  // Constant regardless of chrome visibility: the chrome now floats over the content as an
+  // overlay (see ReaderScreen) rather than sharing flex space with this viewport, so varying
+  // this padding by isChromeHidden would defeat that — it resizes this component's own
+  // container just the same as the flex-sizing it replaced, still triggering the expensive
+  // ResizeObserver → rendition.resize() → full column reflow on every chrome toggle.
+  const topPadding = 'max(10px, env(safe-area-inset-top))';
+  const rightPadding = 'max(10px, env(safe-area-inset-right))';
+  const bottomPadding = 'max(10px, env(safe-area-inset-bottom))';
+  const leftPadding = 'max(10px, env(safe-area-inset-left))';
 
   return (
     <div

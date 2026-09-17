@@ -135,7 +135,16 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
         onClick={onClose}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => {
+          // Close from the touch itself and consume it here with preventDefault, rather than
+          // leaving `onClick` to handle touch input via the browser's trailing synthetic click:
+          // that synthetic click fires (and hit-tests) after this backdrop has already unmounted
+          // (onClose removes the panel), so without preventDefault it falls through to whatever
+          // is now underneath — the book itself — and can register as an unintended tap there.
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }}
         style={{
           position: 'fixed',
           inset: 0,

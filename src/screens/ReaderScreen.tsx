@@ -611,32 +611,38 @@ export const ReaderScreen: React.FC = () => {
         fractionOverride={isEpub ? epubIntraProgress?.fraction : undefined}
       />
 
-      {/* Chrome: top bar + page-position strip, shown/hidden as a single unit */}
-      {isChromeVisible && (
-        <div className="reader-kin-chrome">
-          <ReaderToolbar
-            bookTitle={book?.title || 'PDF Document'}
-            bookId={book?.id || ''}
-            isBookmarked={bookmarked}
-            hasUnreadRecap={hasUnreadRecap}
-            toolsOpen={toolsOpen}
-            onToggleBookmark={handleToggleBookmark}
-            onOpenTools={() => setToolsOpen((v) => !v)}
-          />
-          <ReaderPageStrip
-            currentPage={currentPage}
-            totalPages={totalPages}
-            labelOverride={
-              isEpub && epubIntraProgress
-                ? `Page ${epubIntraProgress.page} of ${epubIntraProgress.total} · Chapter ${currentPage} of ${totalPages}`
-                : undefined
-            }
-          />
-        </div>
-      )}
-
       {/* Reader Main Layout */}
       <div {...(isEpub ? {} : swipeHandlers)} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* Chrome: top bar + page-position strip, shown/hidden as a single unit. Floats over the
+            book as an absolutely-positioned overlay rather than sharing flex space with it — as a
+            flex sibling, mounting/unmounting this shrank or grew the reader viewport's box on
+            every toggle, which for EPUB tore down and reflowed the whole rendered chapter via
+            EpubViewport's ResizeObserver (see its topPadding/rightPadding/etc. comment). An
+            overlay never changes the viewport's own box, so no reflow fires just from toggling
+            chrome visibility. */}
+        {isChromeVisible && (
+          <div className="reader-kin-chrome" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 45 }}>
+            <ReaderToolbar
+              bookTitle={book?.title || 'PDF Document'}
+              bookId={book?.id || ''}
+              isBookmarked={bookmarked}
+              hasUnreadRecap={hasUnreadRecap}
+              toolsOpen={toolsOpen}
+              onToggleBookmark={handleToggleBookmark}
+              onOpenTools={() => setToolsOpen((v) => !v)}
+            />
+            <ReaderPageStrip
+              currentPage={currentPage}
+              totalPages={totalPages}
+              labelOverride={
+                isEpub && epubIntraProgress
+                  ? `Page ${epubIntraProgress.page} of ${epubIntraProgress.total} · Chapter ${currentPage} of ${totalPages}`
+                  : undefined
+              }
+            />
+          </div>
+        )}
+
         {loadingUrl ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
             <ConcentricPortal size={70} />
