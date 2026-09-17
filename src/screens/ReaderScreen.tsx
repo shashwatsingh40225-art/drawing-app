@@ -67,6 +67,11 @@ export const ReaderScreen: React.FC = () => {
   const [sessionsReady, setSessionsReady] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
+  // EPUB only: `currentPage`/`totalPages` are spine sections (chapters), the only unit bookmarks
+  // and reading sessions track — coarse enough that the progress bar/strip would otherwise sit
+  // frozen for dozens of page turns within one chapter. epub.js reports pagination within the
+  // section actually on screen directly on every relocation; this mirrors that for display only.
+  const [epubIntraProgress, setEpubIntraProgress] = useState<{ fraction: number; page: number; total: number } | null>(null);
   const [chapterTitles, setChapterTitles] = useState<string[] | undefined>(undefined);
   // EPUB only: precise position within currentPage's spine section. `epubNav.cfi` paired with
   // `epubNav.token` requests a jump to that exact position (see EpubViewport's targetCfi/navToken);
@@ -161,6 +166,7 @@ export const ReaderScreen: React.FC = () => {
     if (!id) return;
     userNavigatedRef.current = false;
     setChapterTitles(undefined);
+    setEpubIntraProgress(null);
     const saved = getProgress(id);
     const pageParam = parseInt(searchParams.get('page') ?? '', 10);
     const hasPageParam = !isNaN(pageParam) && pageParam >= 1;
@@ -340,6 +346,20 @@ export const ReaderScreen: React.FC = () => {
       if (id) saveProgress(id, page, totalPages, 0, zoomScale, undefined, cfi);
     },
     [id, totalPages, zoomScale, saveProgress]
+  );
+
+  const handleEpubIntraProgress = useCallback(
+    (info: { sectionIndex: number; sectionCount: number; displayedPage: number; displayedTotal: number }) => {
+      const sectionCount = Math.max(1, info.sectionCount);
+      const displayedTotal = Math.max(1, info.displayedTotal);
+      const withinSection = (info.displayedPage - 1) / displayedTotal;
+      setEpubIntraProgress({
+        fraction: (info.sectionIndex + withinSection) / sectionCount,
+        page: info.displayedPage,
+        total: info.displayedTotal,
+      });
+    },
+    []
   );
 
   const handleUpdateBoundaries = useCallback(
@@ -526,6 +546,10 @@ export const ReaderScreen: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, handlePageChange, isEpub, handleReaderKeyCommand]);
 
+  // PDF only: this turns a whole page on its own. EPUB has its own independent swipe handling
+  // inside EpubViewport's iframe listeners, which turns exactly one on-screen page via
+  // epubViewportRef — routing the *same* gesture through this handler too, keyed on `currentPage`
+  // (a whole spine section for EPUB), made an edge swipe skip an entire chapter.
   const swipeHandlers = useSwipeGesture({
     onSwipeLeft: () => {
       if (zoomScale <= 1.0) {
@@ -573,7 +597,11 @@ export const ReaderScreen: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      <ReadingProgressBar currentPage={currentPage} totalPages={totalPages} />
+      <ReadingProgressBar
+        currentPage={currentPage}
+        totalPages={totalPages}
+        fractionOverride={isEpub ? epubIntraProgress?.fraction : undefined}
+      />
 
       {/* Chrome: top bar + page-position strip, shown/hidden as a single unit */}
       {isChromeVisible && (
@@ -587,12 +615,20 @@ export const ReaderScreen: React.FC = () => {
             onToggleBookmark={handleToggleBookmark}
             onOpenTools={() => setToolsOpen((v) => !v)}
           />
-          <ReaderPageStrip currentPage={currentPage} totalPages={totalPages} />
+          <ReaderPageStrip
+            currentPage={currentPage}
+            totalPages={totalPages}
+            labelOverride={
+              isEpub && epubIntraProgress
+                ? `Page ${epubIntraProgress.page} of ${epubIntraProgress.total} · Chapter ${currentPage} of ${totalPages}`
+                : undefined
+            }
+          />
         </div>
       )}
 
       {/* Reader Main Layout */}
-      <div {...swipeHandlers} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div {...(isEpub ? {} : swipeHandlers)} style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         {loadingUrl ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
             <ConcentricPortal size={70} />
@@ -641,6 +677,7 @@ export const ReaderScreen: React.FC = () => {
             nightMode={nightMode}
             onPageChange={handlePageChange}
             onLocationChange={handleEpubLocationChange}
+            onIntraSectionProgress={handleEpubIntraProgress}
             onActivity={() => window.dispatchEvent(new Event('touchstart'))}
             onKeyCommand={handleReaderKeyCommand}
             onLeftTap={() => {

@@ -35,6 +35,11 @@ interface EpubViewportProps {
   /** Fires on every relocation, including intra-section moves, with the precise CFI reached —
    *  for exact resume position and the recap spoiler guard. */
   onLocationChange?: (cfi: string, page: number) => void;
+  /** Fires on every relocation with the reader's live position within the *current section* —
+   *  epub.js reports this per-section pagination directly, so the progress UI can move smoothly
+   *  between page turns instead of sitting frozen until a whole chapter finishes (spine sections
+   *  are the only unit `currentPage`/`onPageChange` track). */
+  onIntraSectionProgress?: (info: { sectionIndex: number; sectionCount: number; displayedPage: number; displayedTotal: number }) => void;
   /** One title per spine section, built from the book's table of contents, for a chapter picker. */
   onChaptersLoaded?: (titles: string[]) => void;
   /** Fired on every left/right tap that turns a page, even one that doesn't cross a section —
@@ -52,39 +57,41 @@ interface EpubViewportProps {
   onKeyCommand?: (key: string) => void;
 }
 
-// Broad, !important selectors so these overrides win over an EPUB's own author CSS even when it
-// targets specific elements (e.g. `p { color: #222 }`), which a plain override on `body` alone
-// cannot beat — inheritance always loses to any rule specified directly on the element.
-const ZOOM_NIGHT_SELECTOR =
-  'body, p, div, span, li, td, th, blockquote, dd, dt, figcaption, a, h1, h2, h3, h4, h5, h6';
+/** Every rule is scoped under `body.night` (the class epub.js's own `themes.select()` toggles on
+ *  the iframe's <body>) so switching back to `themes.select('default')` — which only removes the
+ *  class, never the injected <style> tag itself — makes these rules stop matching instead of
+ *  staying latched on forever. */
+const NIGHT_TEXT_SELECTOR = 'p, span, li, dd, dt, figcaption, h1, h2, h3, h4, h5, h6';
+/** Containers that may carry an author-defined background (callouts, cards, tables) — forcing a
+ *  light text color on them without also neutralizing their background would leave that text
+ *  invisible against its own (unchanged) light box, so these get their background cleared instead
+ *  of a forced color, letting the dark page background show through underneath. */
+const NIGHT_CONTAINER_SELECTOR = 'div, td, th, blockquote';
+
+function scoped(prefix: string, selectorList: string) {
+  return selectorList
+    .split(',')
+    .map((s) => `${prefix} ${s.trim()}`)
+    .join(', ');
+}
 
 const NIGHT_THEME = {
-  'html, body': { background: '#18181a !important', color: '#e4e0d8 !important' },
-  [ZOOM_NIGHT_SELECTOR]: { color: '#e4e0d8 !important' },
-  a: { color: '#d9a55c !important' },
+  'body.night': { background: '#18181a !important', color: '#e4e0d8 !important' },
+  [scoped('body.night', NIGHT_TEXT_SELECTOR)]: { color: '#e4e0d8 !important' },
+  [scoped('body.night', NIGHT_CONTAINER_SELECTOR)]: { 'background-color': 'transparent !important' },
+  'body.night a': { color: '#d9a55c !important' },
 };
-
-/** `rem` (root-relative) rather than `%`/`em` avoids runaway compounding when the same broad
- *  selector matches nested elements (a `div` inside a `div` inside a `p`, etc.), and a unitless
- *  line-height scales proportionally with whatever font-size ends up applied. */
-function zoomRules(scale: number) {
-  return {
-    [ZOOM_NIGHT_SELECTOR]: {
-      'font-size': `${scale}rem !important`,
-      'line-height': '1.5 !important',
-    },
-  };
-}
 
 const PAGE_TURN_MS = 140;
 const TAP_ZONE_MOVE_THRESHOLD = 10;
 const TAP_ZONE_DURATION_THRESHOLD = 400;
 const SWIPE_THRESHOLD = 50;
 const SWIPE_DURATION_MS = 350;
-/** Mobile browsers fire a synthetic 'click' at touch-lift coordinates after a swipe; suppressing
- *  the click-driven tap-zone logic for this long after a recognized swipe stops that synthetic
- *  click from re-triggering navigation (often backward — see EPUB-029). */
-const POST_SWIPE_CLICK_SUPPRESS_MS = 500;
+/** How long to wait for the theme/content hooks to finish on a newly rendered section (via the
+ *  'rendered' event) before revealing it anyway — covers same-section turns, which never fire a
+ *  fresh 'rendered' event because no new iframe is created. */
+const REVEAL_FALLBACK_MS = 150;
+const RESIZE_DEBOUNCE_MS = 150;
 const COMMAND_KEYS = new Set(['+', '=', '-', '_', '0', 'b', 'B', 'Escape']);
 
 /** Depth-first flatten of the TOC, in document order. Defensive against a missing/malformed
@@ -167,6 +174,7 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   nightMode = false,
   onPageChange,
   onLocationChange,
+  onIntraSectionProgress,
   onChaptersLoaded,
   onLeftTap,
   onCenterTap,
@@ -186,9 +194,9 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // sees taps that land on the padding around the iframe, never on the book text itself. Kept
   // fresh by a ref since the mount effect below (which wires the iframe-side listeners) only
   // re-runs when the file changes, not on every render.
-  const handlersRef = useRef({ onPageChange, onLocationChange, onLeftTap, onCenterTap, onRightTap, onActivity, onKeyCommand });
+  const handlersRef = useRef({ onPageChange, onLocationChange, onIntraSectionProgress, onLeftTap, onCenterTap, onRightTap, onActivity, onKeyCommand });
   useEffect(() => {
-    handlersRef.current = { onPageChange, onLocationChange, onLeftTap, onCenterTap, onRightTap, onActivity, onKeyCommand };
+    handlersRef.current = { onPageChange, onLocationChange, onIntraSectionProgress, onLeftTap, onCenterTap, onRightTap, onActivity, onKeyCommand };
   });
 
   // The last spine section epub.js told us it's showing, via 'relocated'. Lets the "jump to a
@@ -196,9 +204,25 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // displaying the right thing) apart from an external one (bookmark, resume, chapter select)
   // that actually needs to force a jump.
   const lastRelocatedIndexRef = useRef<number | null>(null);
+  // The `navToken` this component last acted on — lets the section-jump effect below tell
+  // "user re-selected the chapter already on screen" (token bumped, index unchanged; must still
+  // navigate) apart from "epub.js relocated here on its own" (index unchanged, token didn't bump).
+  const lastHandledNavTokenRef = useRef<number>(0);
   const spineLengthRef = useRef<number>(0);
-  const lastSwipeAtRef = useRef<number>(0);
+  const currentCfiRef = useRef<string | null>(null);
+  // Set right after a real swipe turns the page; consumed (and cleared) by the very next 'click'
+  // event, which on mobile is the browser's synthetic click at touch-lift — a fixed time window
+  // instead of this one-shot flag would also swallow a genuine tap the user makes shortly after.
+  const suppressNextClickRef = useRef(false);
+  // Captured on 'mousedown', before the browser clears any active selection ahead of the 'click'
+  // that follows — see the click handler's selection check for why 'click' time is too late.
+  const selectionAtMouseDownRef = useRef(false);
   const swipeStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  // Callbacks waiting on the next 'rendered' event (theme/content hooks finished) before it's
+  // safe to reveal a section that was just turned to, so night-mode CSS is already applied and a
+  // freshly-opened iframe's default white background never flashes through.
+  const revealWaitersRef = useRef<(() => void)[]>([]);
+  const resizeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clampIndex = (index: number) => {
     const max = Math.max(0, spineLengthRef.current - 1);
@@ -208,7 +232,12 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // A quick cross-fade around a page turn — epub.js swaps content into the same iframe instantly,
   // so this is what stands in for a "turn" instead of a jarring instant cut. Always resolves (a
   // rejected `action`, e.g. a section that fails to parse, must not surface as an unhandled
-  // promise rejection or leave the view stuck at opacity 0).
+  // promise rejection or leave the view stuck at opacity 0). Revealing waits for the next
+  // 'rendered' event rather than firing immediately after `action` settles: epub.js resolves
+  // `rendition.display()` as soon as the section's DOM is in place, before its theme/content
+  // hooks (which inject the night-mode stylesheet) have actually run — revealing right away shows
+  // a flash of the unstyled section first. A same-section turn never fires a fresh 'rendered'
+  // (no new iframe is created), so a short fallback timer reveals it instead.
   const animateTurn = (action: () => Promise<void> | void) => {
     const el = containerRef.current;
     if (!el) {
@@ -221,13 +250,20 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     }
     el.style.transition = `opacity ${PAGE_TURN_MS}ms ease`;
     el.style.opacity = '0';
+    let revealed = false;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      requestAnimationFrame(() => {
+        if (el) el.style.opacity = '1';
+      });
+    };
+    revealWaitersRef.current.push(reveal);
     Promise.resolve()
       .then(action)
       .catch((err) => console.warn('Page turn failed:', err))
       .finally(() => {
-        requestAnimationFrame(() => {
-          if (el) el.style.opacity = '1';
-        });
+        setTimeout(reveal, REVEAL_FALLBACK_MS);
       });
   };
 
@@ -251,8 +287,17 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     TAP_ZONE_DURATION_THRESHOLD
   );
 
+  // Passing no arguments makes epub.js fall back to its internal `settings.width`/`height`
+  // (undefined the first time resize() is ever called this way), which it then writes straight
+  // into the container/iframe's inline `style.width`/`height` — wiping the 100% sizing this
+  // component relies on and collapsing the column layout. Measuring and passing real pixel
+  // dimensions keeps every resize() call self-contained.
   const resizeRendition = () => {
-    (renditionRef.current as unknown as { resize?: (w?: number, h?: number) => void } | null)?.resize?.();
+    const el = containerRef.current;
+    const rendition = renditionRef.current as unknown as { resize?: (w?: number, h?: number) => void } | null;
+    if (!el || !rendition?.resize) return;
+    const { width, height } = el.getBoundingClientRect();
+    if (width > 0 && height > 0) rendition.resize(width, height);
   };
 
   // Open the book and mount the rendition. Re-runs only when the file or an explicit retry changes.
@@ -310,7 +355,12 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
 
         rendition.themes.register('night', NIGHT_THEME);
         rendition.themes.select(nightMode ? 'night' : 'default');
-        rendition.themes.registerRules('default', zoomRules(zoomScale));
+        // `fontSize`/`override` set a plain (non-!important) inline style on the section's <body>,
+        // so relative author sizing (the normal case — em/%/rem headings) keeps scaling
+        // proportionally from that new base instead of every element being forced to one literal
+        // size, which is what wiping out heading hierarchy amounts to.
+        rendition.themes.fontSize(`${Math.round(zoomScale * 100)}%`);
+        rendition.themes.override('line-height', '1.5');
 
         rendition.on('displayerror', (err: Error) => {
           if (cancelled) return;
@@ -319,7 +369,11 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
           if (onLoadError) onLoadError(err);
         });
         rendition.on('rendered', () => {
-          if (!cancelled) setIsLoading(false);
+          if (cancelled) return;
+          setIsLoading(false);
+          const waiters = revealWaitersRef.current;
+          revealWaitersRef.current = [];
+          waiters.forEach((fn) => fn());
         });
 
         // The book-wide position after every display/next/prev, whatever triggered it. This is
@@ -329,7 +383,18 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
         rendition.on('relocated', (location: Location) => {
           if (cancelled) return;
           const index = location.start.index;
-          if (location.start.cfi) handlersRef.current.onLocationChange?.(location.start.cfi, index + 1);
+          if (location.start.cfi) {
+            currentCfiRef.current = location.start.cfi;
+            handlersRef.current.onLocationChange?.(location.start.cfi, index + 1);
+          }
+          if (location.start.displayed) {
+            handlersRef.current.onIntraSectionProgress?.({
+              sectionIndex: index,
+              sectionCount: spineLengthRef.current,
+              displayedPage: location.start.displayed.page,
+              displayedTotal: location.start.displayed.total,
+            });
+          }
           if (index === lastRelocatedIndexRef.current) return;
           const isFirstLocation = lastRelocatedIndexRef.current === null;
           lastRelocatedIndexRef.current = index;
@@ -341,17 +406,36 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
         // rendition itself, `contents` being the Contents wrapper for the iframe that was clicked.
         rendition.on('click', (event: MouseEvent, contents?: Contents) => {
           handlersRef.current.onActivity?.();
-          // A synthetic click follows a recognized swipe on mobile at the touch-lift coordinates —
-          // letting it also run tap-zone logic can turn the page a second time, backwards.
-          if (Date.now() - lastSwipeAtRef.current < POST_SWIPE_CLICK_SUPPRESS_MS) return;
+          if (event.button !== 0) return; // ignore right/middle click — the browser doesn't
+          // normally route these through 'click', but epub.js's own listener isn't guaranteed to
+          // filter it upstream, and this is a one-line guard against a stray page turn either way.
+          // The single synthetic click a real swipe's touch-lift generates on mobile — letting it
+          // also run tap-zone logic would turn the page a second time, backwards.
+          if (suppressNextClickRef.current) {
+            suppressNextClickRef.current = false;
+            return;
+          }
           const targetEl = event.target as HTMLElement | null;
           // A footnote or reference link in the outer thirds must navigate, not turn the page.
           if (targetEl?.closest?.('a[href]')) return;
-          const selection = contents?.window?.getSelection?.();
-          if (selection && selection.toString().trim().length > 0) return;
-          const width = contents?.window?.innerWidth;
+          // The browser collapses a text selection on `mousedown`, before `click` fires — so by
+          // the time this handler runs, a click that's purely dismissing a selection always
+          // reads as "nothing selected" and would otherwise fall through to a page turn. What
+          // actually matters is whether there *was* a selection when this gesture started.
+          if (selectionAtMouseDownRef.current) {
+            selectionAtMouseDownRef.current = false;
+            return;
+          }
+          const width = containerRef.current?.getBoundingClientRect().width;
           if (!width) return;
-          const fraction = event.clientX / width;
+          // The section's iframe is sized to hold every one of its columns side by side (epub.js
+          // expands it to `pageCount * pageWidth`, not the on-screen viewport), so `event.clientX`
+          // is a position on that whole strip, not on the single visible page — e.g. on page 1 of
+          // a 5-page section, tapping dead center lands around clientX ≈ 0.5 * pageWidth, which as
+          // a fraction of the full 5-page-wide strip is ~0.1, always reading as the leftmost
+          // third. Reducing modulo the single visible page's width recovers the on-screen tap
+          // position within *that* page before computing the left/center/right zone.
+          const fraction = ((event.clientX % width) + width) % width / width;
           if (fraction < 1 / 3) turnPrev();
           else if (fraction > 2 / 3) turnNext();
           else handlersRef.current.onCenterTap();
@@ -402,12 +486,16 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
           const dx = touch.clientX - start.x;
           const dy = touch.clientY - start.y;
           if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD) {
-            lastSwipeAtRef.current = Date.now();
+            suppressNextClickRef.current = true;
             if (dx > 0) turnPrev();
             else turnNext();
           }
         });
-        rendition.on('mousedown', () => handlersRef.current.onActivity?.());
+        rendition.on('mousedown', (_event: MouseEvent, contents?: Contents) => {
+          handlersRef.current.onActivity?.();
+          const selection = contents?.window?.getSelection?.();
+          selectionAtMouseDownRef.current = Boolean(selection && selection.toString().trim().length > 0);
+        });
 
         const startIndex = clampIndex(currentPage - 1);
         const target = book.spine.get(startIndex);
@@ -451,18 +539,38 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     const rendition = renditionRef.current;
     const book = bookRef.current;
     if (!rendition || !book) return;
+    const tokenChanged = navToken !== lastHandledNavTokenRef.current;
+    lastHandledNavTokenRef.current = navToken;
     if (targetCfi) {
       animateTurn(() => rendition.display(targetCfi));
       return;
     }
-    if (lastRelocatedIndexRef.current === currentPage - 1) return;
+    // Without the token check, re-selecting the chapter already on screen (e.g. from the chapter
+    // picker while a few pages into it) would silently no-op: the spine index matches what
+    // epub.js already relocated to on its own, even though the user explicitly asked to jump back
+    // to its start.
+    if (!tokenChanged && lastRelocatedIndexRef.current === currentPage - 1) return;
     const section = book.spine.get(clampIndex(currentPage - 1));
     if (section) animateTurn(() => rendition.display(section.href));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, navToken]);
 
+  // Re-anchors to the CFI the reader was actually at after changing zoom: font-size changes
+  // reflow every column, so without this the viewport stays at the same *scroll offset* while the
+  // text underneath it has shifted — landing mid-sentence, sometimes with a line sliced across the
+  // old and new column boundary.
   useEffect(() => {
-    renditionRef.current?.themes.registerRules('default', zoomRules(zoomScale));
+    const rendition = renditionRef.current;
+    if (!rendition) return;
+    rendition.themes.fontSize(`${Math.round(zoomScale * 100)}%`);
+    rendition.themes.override('line-height', '1.5');
+    if (currentCfiRef.current) {
+      const cfi = currentCfiRef.current;
+      requestAnimationFrame(() => {
+        if (renditionRef.current === rendition) rendition.display(cfi);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoomScale]);
 
   useEffect(() => {
@@ -472,13 +580,20 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // The container can change size for reasons that never fire a window 'resize' event — chrome
   // show/hide changes only the flex child's height, and a device rotation on some browsers
   // resizes the container before (or without) a matching window event. epub.js does not observe
-  // this on its own, so its column layout goes stale and clips or misjudges page breaks.
+  // this on its own, so its column layout goes stale and clips or misjudges page breaks. Debounced
+  // since a drag-resize or an animated chrome show/hide fires this repeatedly in quick succession.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => resizeRendition());
+    const observer = new ResizeObserver(() => {
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+      resizeDebounceRef.current = setTimeout(resizeRendition, RESIZE_DEBOUNCE_MS);
+    });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+    };
   }, []);
 
   const topPadding = isChromeHidden ? 'max(10px, env(safe-area-inset-top))' : '24px';
