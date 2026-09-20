@@ -1,8 +1,6 @@
 import React from 'react';
 
 interface PageHeaderProps {
-  icon?: React.ReactNode;
-  eyebrowLabel?: string;
   title: string;
   description?: string;
   action?: React.ReactNode;
@@ -11,8 +9,6 @@ interface PageHeaderProps {
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
-  icon,
-  eyebrowLabel,
   title,
   description,
   action,
@@ -35,25 +31,6 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       }}
     >
       <div>
-        {eyebrowLabel && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontFamily: 'var(--font-body)',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--color-secondary)',
-              marginBottom: '6px',
-            }}
-          >
-            {icon && <span>{icon}</span>}
-            <span>{eyebrowLabel}</span>
-          </div>
-        )}
         <h1
           style={{
             fontFamily: 'var(--font-display)',

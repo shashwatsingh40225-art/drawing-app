@@ -196,7 +196,7 @@ export const BookUploadZone: React.FC<BookUploadZoneProps> = ({ onSuccess, onCan
             Upload to Private Library
           </h3>
           <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--color-text-secondary)' }}>
-            Upload reference manuals, anatomy studies, and sketchbook PDFs or EPUBs (max 25MB).
+            Upload reference manuals, anatomy studies, and sketchbook books (max 25MB).
           </p>
         </div>
         {onCancel && (

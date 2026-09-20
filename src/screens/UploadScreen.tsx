@@ -227,8 +227,6 @@ export const UploadScreen: React.FC<UploadScreenProps> = () => {
       }}
     >
       <PageHeader
-        icon={<UploadCloud size={16} />}
-        eyebrowLabel="Studio Folio Upload"
         title="Upload Drawing"
         description="Preserve your drawing in high fidelity with metadata, medium classification, and sketchbook collections."
         action={

@@ -5,13 +5,10 @@ export const AboutScreen: React.FC = () => {
   return (
     <div className="fade-in" style={{ padding: '48px 24px 120px' }}>
       <article style={{ maxWidth: '720px', margin: '0 auto' }}>
-        {/* Eyebrow & Title */}
+        {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '28px', width: 'auto' }} />
-            <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-secondary)', fontWeight: 600 }}>
-              Studio Manifesto & Folio Notes
-            </span>
+          <div style={{ marginBottom: '16px' }}>
+            <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '36px', width: 'auto' }} />
           </div>
 
           <h1 style={{ fontSize: 'clamp(2.4rem, 4.5vw, 3.2rem)', lineHeight: 1.15, marginBottom: '16px', color: 'var(--color-primary)' }}>

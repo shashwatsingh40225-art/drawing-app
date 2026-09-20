@@ -65,10 +65,10 @@ export const router = createBrowserRouter([
       { path: 'sketchbook/:id/edit', element: <LegacySketchbookEditRedirect /> },
       // Upload
       { path: 'upload', element: <UploadScreen /> },
-      // My Library (PDF books)
+      // My Library (Books)
       { path: 'library', element: <LibraryScreen /> },
       { path: 'library/:id', element: <BookDetailScreen /> },
-      // PDF Reader — its own boundary so a crash here (e.g. a device-specific PDF-rendering
+      // Book Reader — its own boundary so a crash here (e.g. a device-specific rendering
       // failure) doesn't take down the whole app shell, and shows the real error for diagnosis.
       {
         path: 'reader/:id',

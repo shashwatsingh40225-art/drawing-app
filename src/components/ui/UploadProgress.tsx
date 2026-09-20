@@ -29,7 +29,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
       case 'uploading':
         return `Uploading (${Math.round(progress)}%)...`;
       case 'processing':
-        return 'Processing PDF & generating structure...';
+        return 'Processing book & generating structure...';
       case 'done':
         return 'Ready in Library';
       case 'error':

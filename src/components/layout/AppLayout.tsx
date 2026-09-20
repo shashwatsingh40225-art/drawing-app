@@ -105,7 +105,7 @@ export function AppLayout() {
             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--color-primary)' }}>
               Kin
             </span>
-            <span>· Personal Art Collection &amp; PDF Reader</span>
+            <span>· Personal Art Collection &amp; Book Reader</span>
           </div>
 
           <div style={{ display: 'flex', gap: '16px' }}>

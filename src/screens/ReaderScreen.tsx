@@ -623,7 +623,7 @@ export const ReaderScreen: React.FC = () => {
         {isChromeVisible && (
           <div className="reader-kin-chrome" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 45 }}>
             <ReaderToolbar
-              bookTitle={book?.title || 'PDF Document'}
+              bookTitle={book?.title || 'Book'}
               bookId={book?.id || ''}
               isBookmarked={bookmarked}
               hasUnreadRecap={hasUnreadRecap}

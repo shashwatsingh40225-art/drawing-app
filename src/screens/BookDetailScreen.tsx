@@ -578,7 +578,7 @@ export const BookDetailScreen: React.FC = () => {
 
             {bookmarks.length === 0 ? (
               <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--color-text-muted)' }}>
-                No bookmarks added yet. When reading this PDF, click the bookmark icon to save key reference pages.
+                No bookmarks added yet. When reading this book, click the bookmark icon to save key reference pages.
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

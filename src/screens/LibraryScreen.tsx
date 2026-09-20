@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Library, UploadCloud, Search, Plus, BookOpen, Filter } from 'lucide-react';
+import { UploadCloud, Search, Plus, BookOpen, Filter } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -68,10 +68,8 @@ export const LibraryScreen: React.FC = () => {
         } as React.CSSProperties}
       >
       <PageHeader
-        icon={<Library size={16} />}
-        eyebrowLabel="My Library — Kin Studio Collection"
         title="Reference Books & Guides"
-        description="Your private collection of reference PDFs and EPUBs, anatomy guides, art manuals, and study notes. Read and annotate without distractions."
+        description="Your private collection of reference books, anatomy guides, art manuals, and study notes. Read and annotate without distractions."
         action={
           <button
             onClick={() => setShowUploadModal(true)}

@@ -100,10 +100,11 @@ export const ArtworkDetailScreen: React.FC<ArtworkDetailScreenProps> = ({
       </div>
 
       {/* Main Two-Column Layout (Spec: Large artwork left ~60%, Metadata right ~40%) */}
-      <div 
+      <div
+        className="two-column-detail-layout"
         style={{
           display: 'grid',
-          gridTemplateColumns: compareMode ? '1fr 1fr' : 'minmax(320px, 1.3fr) minmax(320px, 1fr)',
+          gridTemplateColumns: compareMode ? '1fr 1fr' : 'minmax(0, 1.3fr) minmax(0, 1fr)',
           gap: '40px',
           alignItems: 'start',
         }}

@@ -50,15 +50,17 @@ export const SignUpScreen: React.FC = () => {
         padding: '24px',
       }}
     >
-      {/* Brand Header */}
-      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-        <div style={{ display: 'inline-block', marginBottom: '12px' }}>
-          <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '56px', width: 'auto' }} />
-        </div>
+      {/* Brand Header — simplified */}
+      <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        <img
+          src="/brand/logo-mark.png"
+          alt="Kin logo mark"
+          style={{ height: '48px', width: 'auto', marginBottom: '8px' }}
+        />
         <h1
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: '2.5rem',
+            fontSize: '2.2rem',
             fontWeight: 700,
             color: 'var(--color-primary)',
             margin: 0,
@@ -67,16 +69,6 @@ export const SignUpScreen: React.FC = () => {
         >
           Kin
         </h1>
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontSize: '0.9rem',
-            color: 'var(--color-text-secondary)',
-            margin: '6px 0 0 0',
-          }}
-        >
-          Create Your Artist Studio & Sketchbook
-        </p>
       </div>
 
       {/* Auth Card */}
@@ -210,11 +202,12 @@ export const SignUpScreen: React.FC = () => {
 
           {(validationError || error) && (
             <div
+              role="alert"
               style={{
-                padding: '10px 12px',
+                padding: '10px 14px',
                 borderRadius: 'var(--radius-sm)',
                 backgroundColor: 'rgba(178, 58, 46, 0.08)',
-                borderLeft: '3px solid var(--color-error)',
+                border: '1px solid rgba(178, 58, 46, 0.2)',
                 color: 'var(--color-error)',
                 fontSize: '0.85rem',
                 fontWeight: 500,

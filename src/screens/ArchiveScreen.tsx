@@ -104,8 +104,6 @@ export const ArchiveScreen: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap', position: 'relative', paddingBottom: '20px', borderBottom: '1px solid var(--color-border)' }}>
             <div style={{ flex: '1 1 320px' }}>
               <PageHeader
-                icon={<img src="/brand/icon-eyeorb-40.png" alt="" style={{ width: '15px', height: '15px', objectFit: 'contain' }} />}
-                eyebrowLabel="Kin Archive — Finding Kindred Work"
                 title="Kin Archive"
                 description="Twenty first-party artworks bundled with Kin Studio. Browse, explore, and reference them for your artistic practice."
                 style={{ marginBottom: 0, paddingBottom: 0, borderBottom: 'none' }}

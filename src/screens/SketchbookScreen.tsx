@@ -7,7 +7,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { FilterBar, FilterState } from '../components/sketchbook/FilterBar';
 import { ArtworkCard } from '../components/sketchbook/ArtworkCard';
 import { CollectionModal } from '../components/collections/CollectionModal';
-import { UploadCloud, Palette, Download } from 'lucide-react';
+import { UploadCloud, Download } from 'lucide-react';
 import { exportAllData } from '../services/exportService';
 import { PageTransition } from '../components/motion/PageTransition';
 import { PigmentBloom } from '../components/motion/PigmentBloom';
@@ -100,8 +100,6 @@ export const SketchbookScreen: React.FC = () => {
         }}
       >
         <PageHeader
-          icon={<Palette size={16} />}
-          eyebrowLabel={`${artworks.length} drawings in sketchbook`}
           title="Your Sketchbook"
           description="Every drawing, study, and folio in your personal artistic journey. Organized by medium, status, and theme."
           action={

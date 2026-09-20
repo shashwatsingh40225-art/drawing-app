@@ -498,14 +498,13 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                       key={sess.id}
                       style={{
                         backgroundColor: 'var(--color-surface-elevated)',
-                        border: '1px solid var(--color-border)',
-                        borderLeft: sess.recap ? '3px solid var(--color-secondary)' : '1px solid var(--color-border)',
+                        border: sess.recap ? '1.5px solid var(--color-secondary)' : '1px solid var(--color-border)',
                         borderRadius: 'var(--radius-md)',
                         padding: '12px 14px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '8px',
-                        boxShadow: 'var(--shadow-subtle)',
+                        boxShadow: sess.recap ? '1.5px 1.5px 0 0 var(--color-secondary), var(--shadow-subtle)' : 'var(--shadow-subtle)',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>

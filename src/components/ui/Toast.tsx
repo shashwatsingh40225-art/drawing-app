@@ -44,7 +44,6 @@ export const ToastContainer: React.FC = () => {
               color: 'var(--color-text-primary)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--color-border)',
-              borderLeft: `4px solid ${borderColor}`,
               boxShadow: 'var(--shadow-medium)',
               padding: '12px 16px',
               display: 'flex',

@@ -94,7 +94,8 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              padding: '3px',
+              padding: '10px',
+              margin: '-7px -7px -7px 0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -102,6 +103,8 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({ artwork }) => {
               transform: starBurst ? 'scale(1.35) rotate(15deg)' : 'scale(1)',
               transition: 'transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), color 150ms ease',
               borderRadius: 'var(--radius-full)',
+              minWidth: '44px',
+              minHeight: '44px',
             }}
             aria-label={artwork.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
           >

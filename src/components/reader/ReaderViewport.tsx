@@ -143,7 +143,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
 
   const handleDocumentError = (err: Error) => {
     console.warn('PDF load error:', err);
-    setLoadError(err.message || 'Could not load PDF document.');
+    setLoadError(err.message || 'Could not load book document.');
     if (onLoadError) onLoadError(err);
   };
 
@@ -283,10 +283,10 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
               >
                 <AlertCircle size={36} color="var(--color-error)" style={{ marginBottom: '12px' }} />
                 <h3 style={{ fontFamily: 'var(--font-display)', color: 'var(--color-primary)', margin: '0 0 8px 0' }}>
-                  Unable to display PDF page
+                  Unable to display book page
                 </h3>
                 <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem', marginBottom: '20px' }}>
-                  {loadError || 'The PDF file could not be parsed. It may be password protected or corrupted.'}
+                  {loadError || 'The book file could not be parsed. It may be password protected or corrupted.'}
                 </p>
                 <button
                   type="button"
@@ -352,7 +352,7 @@ export const ReaderViewport: React.FC<ReaderViewportProps> = ({
         /* Empty / No file */
         <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--color-text-muted)' }}>
           <BookOpen size={40} style={{ opacity: 0.5, marginBottom: '12px' }} />
-          <div>No PDF file provided for this book.</div>
+          <div>No book file provided.</div>
         </div>
       )}
     </div>

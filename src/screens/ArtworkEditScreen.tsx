@@ -186,7 +186,6 @@ export const ArtworkEditScreen: React.FC = () => {
       }}
     >
       <PageHeader
-        eyebrowLabel="Studio Folio Editor"
         title={`Edit "${artwork.title}"`}
         description="Update your artwork title, medium classification, tags, and sketchbook collections."
         action={
