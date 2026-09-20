@@ -8,7 +8,7 @@ export const AboutScreen: React.FC = () => {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ marginBottom: '16px' }}>
-            <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '36px', width: 'auto' }} />
+            <img src="/brand/logo-mark.png" alt="Kin logo mark" style={{ height: '36px', width: 'auto', maxWidth: '100%' }} />
           </div>
 
           <h1 style={{ fontSize: 'clamp(2.4rem, 4.5vw, 3.2rem)', lineHeight: 1.15, marginBottom: '16px', color: 'var(--color-primary)' }}>

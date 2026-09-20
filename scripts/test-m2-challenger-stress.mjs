@@ -231,7 +231,7 @@ challenge('Hero Section styling contains overflow: hidden to contain absolute de
 });
 
 challenge('Hero image and attribution label prevent horizontal blowout', () => {
-  const heroImgMatch = homeCode.match(/<img[^>]*src="\/artist-reference\/art-03\.jpeg"[^>]*style=\{\{([\s\S]*?)\}\}/);
+  const heroImgMatch = homeCode.match(/<img[^>]*src="(?:\/artist-reference\/art-03\.jpeg|\/brand\/illustrations\/art-03-card\.png)"[^>]*style=\{\{([\s\S]*?)\}\}/);
   assert(heroImgMatch, 'Hero image must be present');
   assert(heroImgMatch[1].includes("maxWidth: '100%'"), 'Hero image must have maxWidth: 100%');
 

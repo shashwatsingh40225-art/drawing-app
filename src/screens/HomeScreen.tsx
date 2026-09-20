@@ -632,7 +632,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   color: world.textPrimary,
                 }}
               >
-                Your art, organised
+                Personal Art Collection
               </h3>
               <p
                 style={{
@@ -670,7 +670,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   color: world.textPrimary,
                 }}
               >
-                Read and remember
+                Private Book Reader
               </h3>
               <p
                 style={{

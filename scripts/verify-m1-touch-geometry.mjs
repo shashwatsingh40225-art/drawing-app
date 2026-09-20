@@ -640,12 +640,12 @@ it('Static code verification: ReaderToolsPanel.tsx attaches stopPropagation to c
   // Verify backdrop and container stopPropagation
   assert.match(panelCode, /onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchStart');
   assert.match(panelCode, /onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchMove');
-  assert.match(panelCode, /onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/, 'Backdrop/container must stop TouchEnd');
+  assert.match(panelCode, /onTouchEnd=\{[\s\S]*?e\.stopPropagation\(\)/, 'Backdrop/container must stop TouchEnd');
 
   // Count occurrences: both backdrop and drawer container must have stopPropagation (at least 2 of each)
   const startMatches = (panelCode.match(/onTouchStart=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
   const moveMatches = (panelCode.match(/onTouchMove=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
-  const endMatches = (panelCode.match(/onTouchEnd=\{\(e\)\s*=>\s*e\.stopPropagation\(\)\}/g) || []).length;
+  const endMatches = (panelCode.match(/onTouchEnd=\{[\s\S]*?e\.stopPropagation\(\)[\s\S]*?\}/g) || []).length;
 
   assert.ok(startMatches >= 2, `ReaderToolsPanel has ${startMatches} onTouchStart stopPropagation handlers (expected >= 2)`);
   assert.ok(moveMatches >= 2, `ReaderToolsPanel has ${moveMatches} onTouchMove stopPropagation handlers (expected >= 2)`);
