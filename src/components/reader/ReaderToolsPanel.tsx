@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   ChevronLeft,
@@ -18,11 +18,14 @@ import {
   BookOpen,
   Moon,
   Sun,
+  Search,
+  Type,
 } from 'lucide-react';
 import { Bookmark, ReadingSession } from '../../types/book';
+import { EpubSearchResult } from './EpubViewport';
 import { KIN_ARCHIVE_ASSETS } from '../../data/kinArchive';
 
-type ToolsView = 'menu' | 'thumbnails' | 'bookmarks' | 'archive' | 'recap';
+type ToolsView = 'menu' | 'search' | 'appearance' | 'thumbnails' | 'bookmarks' | 'archive' | 'recap';
 
 interface ReaderToolsPanelProps {
   totalPages: number;
@@ -36,11 +39,20 @@ interface ReaderToolsPanelProps {
   /** One title per section, from the EPUB's table of contents. Present only for EPUB books —
    *  swaps the "Thumbnails" number grid for a "Chapters" list of real chapter names. */
   chapterTitles?: string[];
+  bookFormat?: 'pdf' | 'epub';
+  onSearch?: (query: string) => Promise<EpubSearchResult[]>;
+  onSelectSearchResult?: (result: EpubSearchResult) => void;
+  zoomScale?: number;
+  onZoomChange?: (scale: number) => void;
+  fontFamily?: 'publisher' | 'serif' | 'sans';
+  onFontFamilyChange?: (family: 'publisher' | 'serif' | 'sans') => void;
+  lineHeight?: number;
+  onLineHeightChange?: (height: number) => void;
   onSelectPage: (page: number) => void;
   /** Bookmarks may carry a precise in-chapter position (EPUB); falls back to onSelectPage when absent. */
   onSelectBookmark?: (bookmark: Bookmark) => void;
   onRemoveBookmark: (id: string) => void;
-  onUpdateSessionBoundaries?: (sessionId: string, startPage: number, endPage: number) => Promise<void>;
+  onUpdateSessionBoundaries?: (sessionId: string, startPage: number, endPage: number) => Promise<boolean>;
   onRegenerateSessionRecap?: (sessionId: string) => Promise<void>;
   onDeleteSession?: (sessionId: string) => Promise<void>;
   onStartAddPin: () => void;
@@ -52,14 +64,18 @@ interface ReaderToolsPanelProps {
 }
 
 const MENU_ITEMS: { view: Exclude<ToolsView, 'menu'>; label: string; icon: React.ReactNode; color: string }[] = [
+  { view: 'search', label: 'Search book', icon: <Search size={17} />, color: 'var(--color-secondary)' },
   { view: 'thumbnails', label: 'Thumbnails', icon: <LayoutGrid size={17} />, color: 'var(--color-secondary)' },
   { view: 'bookmarks', label: 'Bookmarks', icon: <BookmarkCheck size={17} />, color: 'var(--color-accent)' },
+  { view: 'appearance', label: 'Reading appearance', icon: <Type size={17} />, color: 'var(--color-secondary)' },
   { view: 'archive', label: 'Kin Archive', icon: <Archive size={17} />, color: 'var(--color-secondary)' },
   { view: 'recap', label: 'Recaps', icon: <Sparkles size={17} />, color: 'var(--color-secondary)' },
 ];
 
 const VIEW_TITLES: Record<ToolsView, string> = {
   menu: 'Tools',
+  search: 'Search book',
+  appearance: 'Reading appearance',
   thumbnails: 'Thumbnails',
   bookmarks: 'Bookmarks',
   archive: 'Kin Archive',
@@ -80,6 +96,15 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   hasUnreadRecap = false,
   maxEditablePage,
   chapterTitles,
+  bookFormat = 'pdf',
+  onSearch,
+  onSelectSearchResult,
+  zoomScale = 1,
+  onZoomChange,
+  fontFamily = 'publisher',
+  onFontFamilyChange,
+  lineHeight = 1.5,
+  onLineHeightChange,
   onSelectPage,
   onSelectBookmark,
   onRemoveBookmark,
@@ -97,6 +122,13 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   const [editStart, setEditStart] = useState<string>('1');
   const [editEnd, setEditEnd] = useState<string>('1');
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchedTerm, setSearchedTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<EpubSearchResult[]>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchRunRef = useRef(0);
 
   const checkIsMobile = () =>
     typeof window !== 'undefined' && (window.innerWidth <= 768 || window.innerHeight <= 500);
@@ -121,6 +153,26 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
   const showInstallTip = isMobile && !isStandalone;
   const hasChapters = Boolean(chapterTitles?.length);
   const headerTitle = view === 'thumbnails' && hasChapters ? 'Chapters' : VIEW_TITLES[view];
+  const runSearch = async () => {
+    const term = searchQuery.trim();
+    if (!onSearch || term.length < 2) {
+      setSearchError('Enter at least two characters.');
+      return;
+    }
+    const run = ++searchRunRef.current;
+    setSearchBusy(true);
+    setSearchError(null);
+    setSearchResults([]);
+    setSearchedTerm(term);
+    try {
+      const results = await onSearch(term);
+      if (run === searchRunRef.current) setSearchResults(results);
+    } catch {
+      if (run === searchRunRef.current) setSearchError('Search could not finish. Try again.');
+    } finally {
+      if (run === searchRunRef.current) setSearchBusy(false);
+    }
+  };
 
   return (
     <>
@@ -203,7 +255,10 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           {view === 'menu' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {MENU_ITEMS.filter((item) => showAddPin || item.view !== 'archive').map((item) => {
+              {MENU_ITEMS.filter((item) => {
+                if (bookFormat !== 'epub' && (item.view === 'search' || item.view === 'appearance')) return false;
+                return showAddPin || item.view !== 'archive';
+              }).map((item) => {
                 const isChaptersItem = item.view === 'thumbnails' && hasChapters;
                 return (
                   <button
@@ -239,7 +294,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                 );
               })}
 
-              {onToggleNightMode && (
+              {onToggleNightMode && bookFormat !== 'epub' && (
                 <button
                   type="button"
                   onClick={onToggleNightMode}
@@ -312,6 +367,67 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                   read with no browser bar at all, like a real app.
                 </div>
               )}
+            </div>
+          ) : view === 'search' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <form onSubmit={(event) => { event.preventDefault(); void runSearch(); }} style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Word or phrase"
+                  aria-label="Search this book"
+                  style={{ flex: 1, minWidth: 0, minHeight: '44px', padding: '8px 10px', fontSize: '16px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-elevated)', color: 'var(--color-text-primary)' }}
+                />
+                <button type="submit" disabled={searchBusy} className="btn-primary" style={{ padding: '0 14px', borderRadius: 'var(--radius-pill)', cursor: searchBusy ? 'wait' : 'pointer' }}>
+                  {searchBusy ? 'Searching…' : 'Search'}
+                </button>
+              </form>
+              {searchError && <p role="alert" style={{ margin: 0, color: 'var(--color-error)', fontSize: '0.82rem' }}>{searchError}</p>}
+              {searchedTerm && !searchBusy && !searchError && (
+                <p role="status" style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: '0.78rem' }}>
+                  {searchResults.length === 0 ? 'No matches in this book.' : `${searchResults.length}${searchResults.length === 80 ? '+' : ''} matches for “${searchedTerm}”`}
+                </p>
+              )}
+              {searchResults.map((result, index) => (
+                <button
+                  key={`${result.cfi}-${index}`}
+                  type="button"
+                  onClick={() => { onSelectSearchResult?.(result); onClose(); }}
+                  style={{ textAlign: 'left', minHeight: '44px', padding: '10px 12px', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+                >
+                  <span style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-secondary)', marginBottom: '4px' }}>Section {result.section}</span>
+                  <span style={{ fontSize: '0.82rem', lineHeight: 1.45, overflowWrap: 'anywhere' }}>{result.excerpt}</span>
+                </button>
+              ))}
+            </div>
+          ) : view === 'appearance' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', color: 'var(--color-text-primary)' }}>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '10px' }}>Text size</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button type="button" aria-label="Smaller text" onClick={() => onZoomChange?.(Math.max(0.7, zoomScale - 0.15))} style={{ minWidth: '44px', minHeight: '44px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-elevated)', cursor: 'pointer' }}>A−</button>
+                  <span style={{ flex: 1, textAlign: 'center', fontSize: '0.86rem' }}>{Math.round(zoomScale * 100)}%</span>
+                  <button type="button" aria-label="Larger text" onClick={() => onZoomChange?.(Math.min(2.5, zoomScale + 0.15))} style={{ minWidth: '44px', minHeight: '44px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-elevated)', cursor: 'pointer' }}>A+</button>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '10px' }}>Typeface</div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['publisher', 'serif', 'sans'] as const).map((family) => (
+                    <button key={family} type="button" aria-pressed={fontFamily === family} onClick={() => onFontFamilyChange?.(family)} style={{ flex: 1, minHeight: '44px', border: fontFamily === family ? '1px solid var(--color-secondary)' : '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: fontFamily === family ? 'rgba(180,83,31,0.08)' : 'var(--color-surface-elevated)', color: 'var(--color-text-primary)', fontSize: '0.78rem', cursor: 'pointer' }}>{family === 'publisher' ? 'Original' : family === 'serif' ? 'Serif' : 'Sans'}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: '10px' }}>Line spacing</div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {([1.35, 1.5, 1.75] as const).map((height) => (
+                    <button key={height} type="button" aria-pressed={lineHeight === height} onClick={() => onLineHeightChange?.(height)} style={{ flex: 1, minHeight: '44px', border: lineHeight === height ? '1px solid var(--color-secondary)' : '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: lineHeight === height ? 'rgba(180,83,31,0.08)' : 'var(--color-surface-elevated)', color: 'var(--color-text-primary)', fontSize: '0.78rem', cursor: 'pointer' }}>{height === 1.35 ? 'Compact' : height === 1.5 ? 'Comfort' : 'Airy'}</button>
+                  ))}
+                </div>
+              </div>
+              {onToggleNightMode && <button type="button" onClick={onToggleNightMode} style={{ minHeight: '44px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', background: 'var(--color-surface-elevated)', color: 'var(--color-text-primary)', cursor: 'pointer' }}>{nightMode ? <Sun size={17} /> : <Moon size={17} />}<span>{nightMode ? 'Use light page' : 'Use dark page'}</span></button>}
             </div>
           ) : view === 'thumbnails' && hasChapters ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -478,7 +594,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', lineHeight: 1.45, padding: '10px 12px', backgroundColor: 'rgba(180, 83, 31, 0.05)', border: '1px solid var(--color-border-subtle)', borderRadius: 'var(--radius-md)' }}>
-                Your sessions are tracked automatically. Read for a while, and a short recap of those pages will be waiting next time you open this book.
+                Your sessions are tracked automatically. Read for a while, and a short recap of what you read will be waiting when you return after a break.
               </div>
 
               {sessions.length === 0 ? (
@@ -522,7 +638,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                           }}
                         >
                           <BookOpen size={11} />
-                          Pages {sess.start_page}–{sess.end_page}
+                          {bookFormat === 'epub' ? 'Sections' : 'Pages'} {sess.start_page}–{sess.end_page}
                         </span>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
@@ -535,7 +651,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
 
                       {isEditing ? (
                         <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Correct session boundaries:</div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>{bookFormat === 'epub' ? 'Correct starting section:' : 'Correct session boundaries:'}</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
                               <span>Start:</span>
@@ -555,11 +671,14 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                                 min={1}
                                 max={totalPages}
                                 value={editEnd}
+                                disabled={bookFormat === 'epub'}
                                 onChange={(e) => setEditEnd(e.target.value)}
                                 style={{ width: '48px', padding: '2px 6px', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '0.78rem' }}
                               />
                             </label>
                           </div>
+                          {bookFormat === 'epub' && <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>The stopping section stays fixed so the recap cannot include unread text.</div>}
+                          {editError && <div role="alert" style={{ fontSize: '0.72rem', color: 'var(--color-error)' }}>{editError}</div>}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
                             <button type="button" onClick={() => setEditingSessionId(null)} style={{ padding: '3px 8px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-pill)', fontSize: '0.72rem', cursor: 'pointer' }}>
                               Cancel
@@ -573,8 +692,9 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                                 if (!isNaN(s) && !isNaN(e) && s >= 1 && e >= s && (!maxEditablePage || e <= maxEditablePage) && onUpdateSessionBoundaries) {
                                   setSavingEdit(true);
                                   try {
-                                    await onUpdateSessionBoundaries(sess.id, s, e);
-                                    setEditingSessionId(null);
+                                    const saved = await onUpdateSessionBoundaries(sess.id, s, e);
+                                    if (saved) setEditingSessionId(null);
+                                    else setEditError('Could not update this session. Check the range and try again.');
                                   } finally {
                                     setSavingEdit(false);
                                   }
@@ -613,7 +733,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '0.74rem', color: 'var(--color-secondary)', fontWeight: 600 }}
                                 title={`Jump to Page ${sess.start_page}`}
                               >
-                                <span>Go to p. {sess.start_page}</span>
+                                <span>Go to {bookFormat === 'epub' ? 'section' : 'p.'} {sess.start_page}</span>
                                 <ArrowRight size={11} />
                               </button>
 
@@ -621,6 +741,7 @@ export const ReaderToolsPanel: React.FC<ReaderToolsPanelProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setEditingSessionId(sess.id);
+                                  setEditError(null);
                                   setEditStart(sess.start_page.toString());
                                   setEditEnd(sess.end_page.toString());
                                 }}

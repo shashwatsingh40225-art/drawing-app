@@ -8,7 +8,6 @@ import { useAnnotationStore } from '../stores/annotationStore';
 import { useToastStore } from '../stores/toastStore';
 import { useReadingSessionStore, RecapBookSource } from '../stores/readingSessionStore';
 import { getBookSignedUrl } from '../services/bookService';
-import { isTransientRecapError, RecapErrorCode } from '../services/geminiRecapService';
 import { SessionDraft, maxEditablePage, pickBridgeSession } from '../services/readingSessionLogic';
 import { useReadingSessionTracker, SessionCloseReason } from '../hooks/useReadingSessionTracker';
 import { ReaderToolbar } from '../components/reader/ReaderToolbar';
@@ -17,7 +16,7 @@ import { ReaderZoomStrip } from '../components/reader/ReaderZoomStrip';
 import { ReaderToolsPanel } from '../components/reader/ReaderToolsPanel';
 import { AddPinChooser } from '../components/reader/AddPinChooser';
 import { ReaderViewport } from '../components/reader/ReaderViewport';
-import { EpubViewport, EpubViewportHandle } from '../components/reader/EpubViewport';
+import { EpubViewport, EpubViewportHandle, EpubSearchResult } from '../components/reader/EpubViewport';
 import { ReadingProgressBar } from '../components/reader/ReadingProgressBar';
 import { MemoryBridgeCard } from '../components/reader/MemoryBridgeCard';
 import { PendingPin } from '../components/reader/AnnotationOverlay';
@@ -25,6 +24,7 @@ import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ConcentricPortal } from '../components/ConcentricPortal';
 import { KIN_ARCHIVE_BY_ID } from '../data/kinArchive';
 import { Book, Bookmark, ReadingSession } from '../types/book';
+import { EpubCFI } from 'epubjs';
 
 const NO_SESSIONS: ReadingSession[] = [];
 
@@ -78,8 +78,16 @@ export const ReaderScreen: React.FC = () => {
   // `currentCfi` mirrors the live position as the reader moves, for progress-saving and bookmarks.
   const [epubNav, setEpubNav] = useState<{ token: number; cfi: string | null }>({ token: 0, cfi: null });
   const [currentCfi, setCurrentCfi] = useState<string | null>(null);
+  const [searchHighlightCfi, setSearchHighlightCfi] = useState<string | null>(null);
+  const [fontFamily, setFontFamily] = useState<'publisher' | 'serif' | 'sans'>(() => {
+    const saved = localStorage.getItem('kin_epub_font_family');
+    return saved === 'serif' || saved === 'sans' ? saved : 'publisher';
+  });
+  const [lineHeight, setLineHeight] = useState<number>(() => {
+    const saved = Number(localStorage.getItem('kin_epub_line_height'));
+    return [1.35, 1.5, 1.75].includes(saved) ? saved : 1.5;
+  });
   const epubViewportRef = useRef<EpubViewportHandle>(null);
-  const lastCfiForPageRef = useRef<{ page: number; cfi: string } | null>(null);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
   const [fitToPage, setFitToPage] = useState<boolean>(false);
   const [nightMode, setNightMode] = useState<boolean>(
@@ -93,6 +101,14 @@ export const ReaderScreen: React.FC = () => {
       }
       return next;
     });
+  }, []);
+  const changeFontFamily = useCallback((value: 'publisher' | 'serif' | 'sans') => {
+    setFontFamily(value);
+    localStorage.setItem('kin_epub_font_family', value);
+  }, []);
+  const changeLineHeight = useCallback((value: number) => {
+    setLineHeight(value);
+    localStorage.setItem('kin_epub_line_height', String(value));
   }, []);
   // Full-screen is the default reading mode on every device; tapping the page centre reveals chrome.
   const [isChromeVisible, setIsChromeVisible] = useState<boolean>(false);
@@ -242,8 +258,7 @@ export const ReaderScreen: React.FC = () => {
   // 4. Reading sessions — inferred automatically while the document is on screen.
   const handleSessionClosed = useCallback(
     (draft: SessionDraft, reason: SessionCloseReason) => {
-      const cfiForEnd = lastCfiForPageRef.current?.page === draft.endPage ? lastCfiForPageRef.current.cfi : null;
-      const saved = saveFinishedSession(draft, cfiForEnd);
+      const saved = saveFinishedSession(draft);
       if (!saved.is_meaningful) return;
 
       if ((reason === 'break' || reason === 'recovered') && draft.bookId === id) {
@@ -261,7 +276,7 @@ export const ReaderScreen: React.FC = () => {
     [id, saveFinishedSession, getBookById, generateRecap]
   );
 
-  useReadingSessionTracker({
+  const { onEpubLocation } = useReadingSessionTracker({
     bookId: id,
     currentPage,
     enabled: Boolean(id && book && docLoaded),
@@ -282,13 +297,6 @@ export const ReaderScreen: React.FC = () => {
 
   const bridgeSession = bridgeSessionId ? bookSessions.find((s) => s.id === bridgeSessionId) ?? null : null;
   const bridgeGenerating = bridgeSession ? Boolean(generatingIds[bridgeSession.id]) : false;
-  const bridgePermanentlyUnavailable = Boolean(
-    bridgeSession &&
-      !bridgeSession.recap &&
-      !bridgeGenerating &&
-      bridgeSession.recap_error_code &&
-      !isTransientRecapError(bridgeSession.recap_error_code as RecapErrorCode)
-  );
   const editableLimit = Math.min(
     Math.max(totalPages, 1),
     maxEditablePage(bookSessions, Math.max(progress?.current_page ?? 1, currentPage))
@@ -321,6 +329,7 @@ export const ReaderScreen: React.FC = () => {
   // (a bookmark that carries one).
   const handlePageChange = useCallback(
     (targetPage: number, cfi?: string | null) => {
+      setSearchHighlightCfi(null);
       const clamped = Math.max(1, Math.min(totalPages || 1, targetPage));
       userNavigatedRef.current = true;
       setCurrentPage(clamped);
@@ -344,16 +353,24 @@ export const ReaderScreen: React.FC = () => {
     [id, totalPages, zoomScale, saveProgress, closeBridge]
   );
 
+  const handleSearchResult = useCallback((result: EpubSearchResult) => {
+    const point = new EpubCFI(result.cfi);
+    // Navigate to the end of the match so a result split by pagination is actually visible.
+    point.collapse(false);
+    handlePageChange(result.section, point.toString());
+    setSearchHighlightCfi(result.cfi);
+  }, [handlePageChange]);
+
   // Precise, live position as the reader moves through an EPUB (every relocation, not just
   // section crossings) — keeps resume position and the recap spoiler guard accurate to the
   // on-screen location instead of only the chapter.
   const handleEpubLocationChange = useCallback(
-    (cfi: string, page: number) => {
+    (cfi: string, page: number, endCfi: string) => {
       setCurrentCfi(cfi);
-      lastCfiForPageRef.current = { page, cfi };
+      onEpubLocation(page, cfi, endCfi);
       if (id) saveProgress(id, page, totalPages, 0, zoomScale, undefined, cfi);
     },
-    [id, totalPages, zoomScale, saveProgress]
+    [id, totalPages, zoomScale, saveProgress, onEpubLocation]
   );
 
   const handleEpubIntraProgress = useCallback(
@@ -372,9 +389,9 @@ export const ReaderScreen: React.FC = () => {
 
   const handleUpdateBoundaries = useCallback(
     async (sessionId: string, startPage: number, endPage: number): Promise<boolean> => {
-      const updated = await updateSessionBoundaries(sessionId, startPage, endPage, editableLimit);
+      const updated = await updateSessionBoundaries(sessionId, startPage, endPage, editableLimit, book?.format ?? 'pdf');
       if (!updated) {
-        showToast({ type: 'error', message: `Choose pages between 1 and ${editableLimit}.` });
+        showToast({ type: 'error', message: isEpub ? 'Adjust the first section only; the stopping place must stay fixed.' : `Choose pages between 1 and ${editableLimit}.` });
         return false;
       }
       if (book) {
@@ -383,7 +400,7 @@ export const ReaderScreen: React.FC = () => {
       }
       return true;
     },
-    [updateSessionBoundaries, editableLimit, book, generateRecap, showToast]
+    [updateSessionBoundaries, editableLimit, book, isEpub, generateRecap, showToast]
   );
 
   const handleRetryRecap = useCallback(
@@ -685,6 +702,9 @@ export const ReaderScreen: React.FC = () => {
             targetCfi={epubNav.cfi}
             navToken={epubNav.token}
             zoomScale={zoomScale}
+            fontFamily={fontFamily}
+            lineHeight={lineHeight}
+            searchHighlightCfi={searchHighlightCfi}
             onLoadSuccess={handleDocumentLoadSuccess}
             onChaptersLoaded={setChapterTitles}
             isChromeHidden={isChromeHidden}
@@ -769,9 +789,10 @@ export const ReaderScreen: React.FC = () => {
         )}
 
         {/* "Previously…" memory bridge — floats over the page, never blocks it from loading */}
-        {bridgeSession && !bridgePermanentlyUnavailable && (
+        {bridgeSession && (
           <MemoryBridgeCard
             session={bridgeSession}
+            unit={isEpub ? 'section' : 'page'}
             isGenerating={bridgeGenerating}
             isMobile={isMobile}
             isChromeHidden={isChromeHidden}
@@ -810,13 +831,22 @@ export const ReaderScreen: React.FC = () => {
             hasUnreadRecap={hasUnreadRecap}
             maxEditablePage={editableLimit}
             chapterTitles={isEpub ? chapterTitles : undefined}
+            bookFormat={book?.format}
+            onSearch={(query) => epubViewportRef.current?.search(query) ?? Promise.resolve([])}
+            onSelectSearchResult={handleSearchResult}
+            zoomScale={zoomScale}
+            onZoomChange={(scale) => setZoomScale(scale)}
+            fontFamily={fontFamily}
+            onFontFamilyChange={changeFontFamily}
+            lineHeight={lineHeight}
+            onLineHeightChange={changeLineHeight}
             onSelectPage={(page) => handlePageChange(page, isEpub ? null : undefined)}
             onSelectBookmark={(bm: Bookmark) => handlePageChange(bm.page_number, bm.epub_cfi ?? null)}
             onRemoveBookmark={(bmId) => removeBookmark(bmId)}
             onUpdateSessionBoundaries={async (sessId, sPage, ePage) => {
-              if (await handleUpdateBoundaries(sessId, sPage, ePage)) {
-                showToast({ type: 'success', message: `Session updated to pages ${sPage}–${Math.min(ePage, editableLimit)}` });
-              }
+              const saved = await handleUpdateBoundaries(sessId, sPage, ePage);
+              if (saved) showToast({ type: 'success', message: `Session updated to ${isEpub ? 'sections' : 'pages'} ${sPage}–${Math.min(ePage, editableLimit)}` });
+              return saved;
             }}
             onRegenerateSessionRecap={async (sessId) => handleRetryRecap(sessId)}
             onDeleteSession={async (sessId) => {

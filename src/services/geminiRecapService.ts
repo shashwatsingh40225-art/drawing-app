@@ -10,6 +10,9 @@ export interface RecapRequest {
   author?: string;
   startPage: number;
   endPage: number;
+  format: 'pdf' | 'epub';
+  startCfi?: string | null;
+  endCfi?: string | null;
   pages: { pageNumber: number; text: string }[];
 }
 

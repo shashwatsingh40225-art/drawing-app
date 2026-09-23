@@ -58,6 +58,13 @@ export interface TrackerState {
   /** Lowest / highest page confirmed read in this session (null until the first confirmation). */
   readStart: number | null;
   readEnd: number | null;
+  /** EPUB positions are CFIs; the section number alone does not measure pages read. */
+  epubScreen?: { key: string; dwellMs: number; section: number; startCfi: string; endCfi: string };
+  epubReadScreens?: string[];
+  epubStartCfi?: string;
+  epubStartSection?: number;
+  epubEndCfi?: string;
+  epubEndSection?: number;
 }
 
 export interface SessionDraft {
@@ -71,6 +78,8 @@ export interface SessionDraft {
   pagesCovered: number;
   isMeaningful: boolean;
   isReread: boolean;
+  startCfi?: string | null;
+  endCfi?: string | null;
 }
 
 export type IdFactory = () => string;
@@ -106,6 +115,21 @@ export function tick(s: TrackerState, now: number, visible: boolean): TrackerSta
 
   const pageDwellMs = s.pageDwellMs + elapsed;
   let { readStart, readEnd } = s;
+  const epubScreen = s.epubScreen
+    ? { ...s.epubScreen, dwellMs: s.epubScreen.dwellMs + elapsed }
+    : undefined;
+  let epubReadScreens = s.epubReadScreens;
+  let { epubStartCfi, epubStartSection, epubEndCfi, epubEndSection } = s;
+  if (epubScreen && epubScreen.dwellMs >= SESSION_RULES.PAGE_READ_DWELL_MS &&
+      !epubReadScreens?.includes(epubScreen.key)) {
+    epubReadScreens = [...(epubReadScreens ?? []), epubScreen.key].slice(-200);
+    if (epubScreen.startCfi && epubScreen.endCfi) {
+      epubStartCfi ??= epubScreen.startCfi;
+      epubStartSection ??= epubScreen.section;
+      epubEndCfi = epubScreen.endCfi;
+      epubEndSection = epubScreen.section;
+    }
+  }
   if (pageDwellMs >= SESSION_RULES.PAGE_READ_DWELL_MS) {
     readStart = readStart === null ? s.currentPage : Math.min(readStart, s.currentPage);
     readEnd = readEnd === null ? s.currentPage : Math.max(readEnd, s.currentPage);
@@ -119,6 +143,30 @@ export function tick(s: TrackerState, now: number, visible: boolean): TrackerSta
     pageDwellMs,
     readStart,
     readEnd,
+    epubScreen,
+    epubReadScreens,
+    epubStartCfi,
+    epubStartSection,
+    epubEndCfi,
+    epubEndSection,
+  };
+}
+
+/** Record the visible EPUB screen and its exact text boundaries after epub.js relocates. */
+export function recordEpubScreen(
+  s: TrackerState,
+  section: number,
+  startCfi: string,
+  endCfi: string,
+  now: number
+): TrackerState {
+  if (section !== s.currentPage || !startCfi || !endCfi) return s;
+  const credited = tick(s, now, true);
+  const key = `${section}:${startCfi}`;
+  return {
+    ...credited,
+    lastInteractionAt: now,
+    epubScreen: { key, dwellMs: credited.epubScreen?.key === key ? credited.epubScreen.dwellMs : 0, section, startCfi, endCfi },
   };
 }
 
@@ -139,14 +187,14 @@ export function changePage(
     if (Math.abs(page - s.currentPage) > SESSION_RULES.JUMP_PAGES) {
       return { state: createTracker(s.sessionId, s.bookId, page, now), closed: null };
     }
-    return { state: { ...s, currentPage: page, pageDwellMs: 0, lastInteractionAt: now }, closed: null };
+    return { state: { ...s, currentPage: page, pageDwellMs: 0, epubScreen: undefined, lastInteractionAt: now }, closed: null };
   }
 
   const isJump = page > s.readEnd + SESSION_RULES.JUMP_PAGES || page < s.readStart - SESSION_RULES.JUMP_PAGES;
   if (isJump) {
     return { state: createTracker(newId(), s.bookId, page, now), closed: s };
   }
-  return { state: { ...s, currentPage: page, pageDwellMs: 0, lastInteractionAt: now }, closed: null };
+  return { state: { ...s, currentPage: page, pageDwellMs: 0, epubScreen: undefined, lastInteractionAt: now }, closed: null };
 }
 
 /** End the session if the reader has been idle in the foreground for a full break. */
@@ -188,9 +236,10 @@ export function closeTracker(s: TrackerState, frontier: number): SessionDraft | 
   const endPage = s.readEnd;
   const pagesCovered = endPage - startPage + 1;
 
+  const readUnits = Math.max(pagesCovered, s.epubReadScreens?.length ?? 0);
   const isMeaningful =
     !isReread &&
-    ((pagesCovered >= SESSION_RULES.MEANINGFUL_MIN_PAGES && s.activeMs >= SESSION_RULES.MEANINGFUL_MIN_ACTIVE_MS) ||
+    ((readUnits >= SESSION_RULES.MEANINGFUL_MIN_PAGES && s.activeMs >= SESSION_RULES.MEANINGFUL_MIN_ACTIVE_MS) ||
       s.activeMs >= SESSION_RULES.DEEP_READ_MIN_ACTIVE_MS);
 
   return {
@@ -204,6 +253,8 @@ export function closeTracker(s: TrackerState, frontier: number): SessionDraft | 
     pagesCovered,
     isMeaningful,
     isReread,
+    startCfi: s.epubStartSection === startPage ? s.epubStartCfi ?? null : null,
+    endCfi: s.epubEndSection === endPage ? s.epubEndCfi ?? null : null,
   };
 }
 

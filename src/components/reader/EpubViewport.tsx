@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import ePub, { Book as EpubBook, Rendition, Contents, Location, NavItem } from 'epubjs';
+import ePub, { Book as EpubBook, Rendition, Contents, Location, NavItem, EpubCFI } from 'epubjs';
 import { ConcentricPortal } from '../ConcentricPortal';
 import { AlertCircle, RefreshCw, BookOpen } from 'lucide-react';
 import { useTapZones } from '../../hooks/useTapZones';
@@ -15,6 +15,13 @@ export interface EpubViewportHandle {
    *  shortcut firing while focus is on the outer chrome, not the book's own iframe). */
   prev: () => void;
   next: () => void;
+  search: (query: string) => Promise<EpubSearchResult[]>;
+}
+
+export interface EpubSearchResult {
+  section: number;
+  cfi: string;
+  excerpt: string;
 }
 
 interface EpubViewportProps {
@@ -30,6 +37,9 @@ interface EpubViewportProps {
   targetCfi?: string | null;
   navToken?: number;
   zoomScale: number;
+  fontFamily?: 'publisher' | 'serif' | 'sans';
+  lineHeight?: number;
+  searchHighlightCfi?: string | null;
   onLoadSuccess: (numPages: number) => void;
   onLoadError?: (error: Error) => void;
   isChromeHidden?: boolean;
@@ -39,7 +49,7 @@ interface EpubViewportProps {
   onPageChange: (page: number) => void;
   /** Fires on every relocation, including intra-section moves, with the precise CFI reached —
    *  for exact resume position and the recap spoiler guard. */
-  onLocationChange?: (cfi: string, page: number) => void;
+  onLocationChange?: (cfi: string, page: number, endCfi: string) => void;
   /** Fires on every relocation with the reader's live position within the *current section* —
    *  epub.js reports this per-section pagination directly, so the progress UI can move smoothly
    *  between page turns instead of sitting frozen until a whole chapter finishes (spine sections
@@ -180,6 +190,9 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   targetCfi = null,
   navToken = 0,
   zoomScale,
+  fontFamily = 'publisher',
+  lineHeight = 1.5,
+  searchHighlightCfi = null,
   onLoadSuccess,
   onLoadError,
   isChromeHidden = false,
@@ -197,6 +210,7 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   const containerRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<EpubBook | null>(null);
   const renditionRef = useRef<Rendition | null>(null);
+  const searchHighlightRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -229,6 +243,10 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   const lastHandledNavTokenRef = useRef<number>(0);
   const spineLengthRef = useRef<number>(0);
   const currentCfiRef = useRef<string | null>(null);
+  const pendingNavigationRef = useRef<{ cfi: string; steps: number } | null>(null);
+  // Keep the passage used for a run of appearance changes stable. Reflow changes the
+  // viewport's first CFI, so anchoring each change to that new first CFI drifts backward.
+  const appearanceAnchorRef = useRef<string | null>(null);
   // Set right after a real swipe turns the page; consumed (and cleared) by the very next 'click'
   // event, which on mobile is the browser's synthetic click at touch-lift — a fixed time window
   // instead of this one-shot flag would also swallow a genuine tap the user makes shortly after.
@@ -299,6 +317,8 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // 'rendered' event to reveal on), so fading it out and back in adds a ~280ms blink for no
   // reason. A cross-section turn genuinely needs it — the fresh iframe starts unstyled.
   const turnPrev = () => {
+    appearanceAnchorRef.current = null;
+    pendingNavigationRef.current = null;
     handlersRef.current.onLeftTap();
     const displayed = lastDisplayedRef.current;
     if (displayed && displayed.page > 1) {
@@ -312,6 +332,8 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     }
   };
   const turnNext = () => {
+    appearanceAnchorRef.current = null;
+    pendingNavigationRef.current = null;
     handlersRef.current.onRightTap();
     const displayed = lastDisplayedRef.current;
     if (displayed && displayed.page < displayed.total) {
@@ -325,7 +347,35 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     }
   };
 
-  useImperativeHandle(ref, () => ({ prev: turnPrev, next: turnNext }), []);
+  useImperativeHandle(ref, () => ({
+    prev: turnPrev,
+    next: turnNext,
+    search: async (query: string): Promise<EpubSearchResult[]> => {
+      const book = bookRef.current;
+      if (!book || query.trim().length < 2) return [];
+      const results: EpubSearchResult[] = [];
+      for (let index = 0; index < spineLengthRef.current && results.length < 80; index++) {
+        const section = book.spine.get(index);
+        if (!section) continue;
+        const wasLoaded = Boolean(section.document);
+        try {
+          await section.load(book.load.bind(book));
+          const matches = section.find(query.trim()) as unknown as { cfi: string; excerpt: string }[];
+          for (const match of matches) {
+            if (results.length >= 80) break;
+            if (match.cfi && match.excerpt) {
+              results.push({ section: index + 1, cfi: match.cfi, excerpt: match.excerpt.trim() });
+            }
+          }
+        } catch {
+          // Search remains useful when a single section is malformed.
+        } finally {
+          if (!wasLoaded) section.unload();
+        }
+      }
+      return results;
+    },
+  }), []);
 
   const tapZoneHandlers = useTapZones(
     { onLeftTap: turnPrev, onCenterTap, onRightTap: turnNext },
@@ -340,14 +390,18 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
   // dimensions keeps every resize() call self-contained.
   const resizeRendition = () => {
     const el = containerRef.current;
-    const rendition = renditionRef.current as unknown as { resize?: (w?: number, h?: number) => void } | null;
+    const rendition = renditionRef.current as unknown as { resize?: (w?: number, h?: number, cfi?: string) => void } | null;
     if (!el || !rendition?.resize) return;
     // Integer pixels (clientWidth/clientHeight), not the fractional getBoundingClientRect —
     // passing a fractional width here would make epub.js lay its columns out against that
     // fractional step while the click handler above measures the integer clientWidth, drifting
     // the two apart the same way a stale getBoundingClientRect read did before (see its comment).
     const { clientWidth: width, clientHeight: height } = el;
-    if (width > 0 && height > 0) rendition.resize(width, height);
+    if (width > 0 && height > 0) {
+      const anchor = appearanceAnchorRef.current ?? currentCfiRef.current;
+      if (anchor) pendingNavigationRef.current = { cfi: anchor, steps: 0 };
+      rendition.resize(width, height, anchor ?? undefined);
+    }
   };
 
   // Open the book and mount the rendition. Re-runs only when the file or an explicit retry changes.
@@ -418,7 +472,10 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
         // proportionally from that new base instead of every element being forced to one literal
         // size, which is what wiping out heading hierarchy amounts to.
         rendition.themes.fontSize(`${Math.round(zoomScale * 100)}%`);
-        rendition.themes.override('line-height', '1.5');
+        rendition.themes.override('line-height', String(lineHeight));
+        if (fontFamily !== 'publisher') {
+          rendition.themes.font(fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'Arial, Helvetica, sans-serif');
+        }
 
         rendition.on('displayerror', (err: Error) => {
           if (cancelled) return;
@@ -440,10 +497,29 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
         // from re-displaying a section epub.js just navigated to on its own.
         rendition.on('relocated', (location: Location) => {
           if (cancelled) return;
+          const pending = pendingNavigationRef.current;
+          if (pending && location.start?.cfi && location.end?.cfi) {
+            try {
+              const compare = new EpubCFI();
+              if (pending.steps < 8 && compare.compare(pending.cfi, location.end.cfi) > 0) {
+                pending.steps++;
+                void rendition.next();
+                return;
+              }
+              if (pending.steps < 8 && compare.compare(pending.cfi, location.start.cfi) < 0) {
+                pending.steps++;
+                void rendition.prev();
+                return;
+              }
+            } catch {
+              // A bad saved CFI should not stop ordinary reading.
+            }
+            pendingNavigationRef.current = null;
+          }
           const index = location.start.index;
           if (location.start.cfi) {
             currentCfiRef.current = location.start.cfi;
-            handlersRef.current.onLocationChange?.(location.start.cfi, index + 1);
+            handlersRef.current.onLocationChange?.(location.start.cfi, index + 1, location.end?.cfi || location.start.cfi);
           }
           if (location.start.displayed) {
             lastDisplayedRef.current = { page: location.start.displayed.page, total: location.start.displayed.total };
@@ -574,6 +650,8 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
 
         const startIndex = clampIndex(currentPage - 1);
         const target = book.spine.get(startIndex);
+        appearanceAnchorRef.current = openCfi;
+        pendingNavigationRef.current = openCfi ? { cfi: openCfi, steps: 0 } : null;
         return rendition.display(openCfi || (target ? target.href : undefined));
       })
       .catch((err: Error) => {
@@ -617,9 +695,13 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     const tokenChanged = navToken !== lastHandledNavTokenRef.current;
     lastHandledNavTokenRef.current = navToken;
     if (targetCfi) {
+      appearanceAnchorRef.current = targetCfi;
+      pendingNavigationRef.current = { cfi: targetCfi, steps: 0 };
       animateTurn(() => rendition.display(targetCfi));
       return;
     }
+    appearanceAnchorRef.current = null;
+    pendingNavigationRef.current = null;
     // Without the token check, re-selecting the chapter already on screen (e.g. from the chapter
     // picker while a few pages into it) would silently no-op: the spine index matches what
     // epub.js already relocated to on its own, even though the user explicitly asked to jump back
@@ -630,23 +712,37 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, navToken]);
 
-  // Re-anchors to the CFI the reader was actually at after changing zoom: font-size changes
-  // reflow every column, so without this the viewport stays at the same *scroll offset* while the
-  // text underneath it has shifted — landing mid-sentence, sometimes with a line sliced across the
-  // old and new column boundary.
+  // Apply all typography changes together, then re-anchor the visible passage after reflow.
   useEffect(() => {
     const rendition = renditionRef.current;
     if (!rendition) return;
+    const cfi = appearanceAnchorRef.current ?? currentCfiRef.current;
+    if (cfi) appearanceAnchorRef.current = cfi;
+    if (cfi) pendingNavigationRef.current = { cfi, steps: 0 };
     rendition.themes.fontSize(`${Math.round(zoomScale * 100)}%`);
-    rendition.themes.override('line-height', '1.5');
-    if (currentCfiRef.current) {
-      const cfi = currentCfiRef.current;
-      requestAnimationFrame(() => {
-        if (renditionRef.current === rendition) rendition.display(cfi);
+    rendition.themes.override('line-height', String(lineHeight));
+    if (fontFamily === 'publisher') {
+      (rendition.themes as typeof rendition.themes & { removeOverride: (name: string) => void }).removeOverride('font-family');
+    } else {
+      rendition.themes.font(fontFamily === 'serif' ? 'Georgia, Cambria, serif' : 'Arial, Helvetica, sans-serif');
+    }
+    const frame = cfi ? requestAnimationFrame(() => {
+      if (renditionRef.current === rendition) void rendition.display(cfi);
+    }) : null;
+    return () => { if (frame !== null) cancelAnimationFrame(frame); };
+  }, [zoomScale, fontFamily, lineHeight]);
+
+  useEffect(() => {
+    const rendition = renditionRef.current;
+    if (!rendition) return;
+    if (searchHighlightRef.current) rendition.annotations.remove(searchHighlightRef.current, 'highlight');
+    searchHighlightRef.current = searchHighlightCfi;
+    if (searchHighlightCfi) {
+      rendition.annotations.highlight(searchHighlightCfi, {}, undefined, 'kin-search-highlight', {
+        fill: '#e8ad54', 'fill-opacity': '0.35', 'mix-blend-mode': 'multiply',
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoomScale]);
+  }, [searchHighlightCfi]);
 
   useEffect(() => {
     renditionRef.current?.themes.select(nightMode ? 'night' : 'default');
@@ -697,7 +793,7 @@ export const EpubViewport = forwardRef<EpubViewportHandle, EpubViewportProps>(({
       }}
     >
       {fileUrl ? (
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        <div ref={containerRef} style={{ width: '100%', maxWidth: '700px', height: '100%', margin: '0 auto' }} />
       ) : (
         <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--color-text-muted)' }}>
           <BookOpen size={40} style={{ opacity: 0.5, marginBottom: '12px' }} />

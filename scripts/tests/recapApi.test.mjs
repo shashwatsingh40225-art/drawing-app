@@ -34,6 +34,7 @@ function backend({
   user = { id: 'user-1' },
   row = { id: SESSION_ID, user_id: 'user-1', book_id: 'book-1', start_page: 84, end_page: 117 },
   bookOwned = true,
+  stored = true,
   geminiReplies = [gemini(RECAP)],
   nvidiaReplies = [],
 } = {}) {
@@ -44,7 +45,7 @@ function backend({
     const u = String(url);
     calls.push({ url: u, init });
     if (u === 'https://sb.test/auth/v1/user') return user ? jsonResponse(200, user) : jsonResponse(401, {});
-    if (u.startsWith('https://sb.test/rest/v1/reading_sessions') && init.method === 'PATCH') return new Response(null, { status: 204 });
+    if (u.startsWith('https://sb.test/rest/v1/reading_sessions') && init.method === 'PATCH') return jsonResponse(200, stored ? [{ id: SESSION_ID }] : []);
     if (u.startsWith('https://sb.test/rest/v1/reading_sessions')) return jsonResponse(200, row ? [row] : []);
     if (u.startsWith('https://sb.test/rest/v1/books')) return jsonResponse(200, bookOwned ? [{ id: 'book-1' }] : []);
     if (u.includes(':generateContent')) {
@@ -89,6 +90,16 @@ test('generates a grounded recap for exactly the session pages and stores it gua
 
   const patch = calls.find((c) => c.init.method === 'PATCH');
   assert.ok(patch.url.includes(`id=eq.${SESSION_ID}`) && patch.url.includes('start_page=eq.84') && patch.url.includes('end_page=eq.117'));
+});
+
+test('a changed reading position cannot produce or store a stale recap', async () => {
+  const row = { id: SESSION_ID, user_id: 'user-1', book_id: 'book-1', start_page: 84, end_page: 117, start_cfi: 'epubcfi(/6/2!/4/2:0)', end_cfi: 'epubcfi(/6/4!/4/2:10)' };
+  const stale = await call(payload({ format: 'epub', startCfi: row.start_cfi, endCfi: 'epubcfi(/6/4!/4/2:5)' }), { row });
+  assert.equal(stale.res.status, 400);
+  assert.equal(stale.geminiCalls().length, 0);
+  const noUpdate = await call(payload({ format: 'epub', startCfi: row.start_cfi, endCfi: row.end_cfi }), { row, stored: false });
+  assert.equal(noUpdate.res.status, 200);
+  assert.equal(noUpdate.body.stored, false);
 });
 
 test('spoiler guard: text from a page after the session end is rejected before Gemini', async () => {
@@ -137,6 +148,7 @@ test('invalid payloads are rejected', async () => {
   assert.equal((await call(payload({ sessionId: 'not-a-uuid' }))).res.status, 400);
   assert.equal((await call(payload({ startPage: 20, endPage: 10 }))).res.status, 400);
   assert.equal((await call(payload({ pages: [] }))).res.status, 400);
+  assert.equal((await call(payload({ format: 'epub' }))).res.status, 400);
   assert.equal((await call('{not json')).res.status, 400);
 });
 
@@ -168,6 +180,7 @@ test('falls back to NVIDIA when Gemini is rate-limited', async () => {
   assert.equal(geminiCalls().length, 1);
   const [n] = nvidiaCalls();
   assert.equal(n.init.headers.Authorization, 'Bearer nv-key');
+  assert.equal(JSON.parse(n.init.body).reasoning_effort, 'none');
   assert.equal(JSON.parse(n.init.body).messages[1].content, JSON.parse(geminiCalls()[0].init.body).contents[0].parts[0].text);
 });
 
@@ -260,7 +273,7 @@ test('a recap cut off by the token limit ends on a complete sentence', async () 
 test('cleanRecapText produces short plain prose', () => {
   assert.equal(api.cleanRecapText('## Previously\n- Mira finds the map hidden in the hold.\n- Oren lies about it.'), 'Mira finds the map hidden in the hold.\nOren lies about it.');
   assert.equal(api.cleanRecapText('Previously… Mira finds the map hidden in the hold.'), 'Mira finds the map hidden in the hold.');
-  assert.equal(api.cleanRecapText('Previously, Mira found the map hidden in the hold.'), 'Previously, Mira found the map hidden in the hold.');
+  assert.equal(api.cleanRecapText('Previously, Mira found the map hidden in the hold.'), 'Mira found the map hidden in the hold.');
   assert.equal(api.cleanRecapText(api.INSUFFICIENT_CONTENT), null);
   const long = Array.from({ length: 60 }, (_, i) => `Sentence number ${i} is here.`).join(' ');
   const cleaned = api.cleanRecapText(long);
@@ -275,4 +288,5 @@ test('buildExcerpt keeps page order, respects the budget, and favours the final 
   assert.ok(excerpt.indexOf('[p. 1]') < excerpt.indexOf('[p. 40]'));
   const block = (n) => excerpt.split(`[p. ${n}]\n`)[1].split('\n\n[p.')[0];
   assert.ok(block(40).length > block(10).length);
+  assert.match(api.buildExcerpt([{ pageNumber: 3, text: 'Read passage' }], 20_000, 'epub'), /^\[section 3\]/);
 });

@@ -4,6 +4,7 @@ import { ReadingSession } from '../../types/book';
 
 interface MemoryBridgeCardProps {
   session: ReadingSession;
+  unit?: 'page' | 'section';
   isGenerating: boolean;
   isMobile: boolean;
   /** Chrome-hidden layout covers the app's bottom navigation, so the sheet can sit at the very bottom. */
@@ -45,6 +46,7 @@ const stopTouch = (e: React.TouchEvent) => e.stopPropagation();
  */
 export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
   session,
+  unit = 'page',
   isGenerating,
   isMobile,
   isChromeHidden = false,
@@ -68,8 +70,10 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
     }
   }, [session.start_page, session.end_page, editing]);
 
-  const pagesLabel =
-    session.start_page === session.end_page ? `Page ${session.start_page}` : `Pages ${session.start_page}–${session.end_page}`;
+  const unitLabel = unit === 'section' ? 'Section' : 'Page';
+  const pagesLabel = session.start_page === session.end_page
+    ? `${unitLabel} ${session.start_page}`
+    : `${unitLabel}s ${session.start_page}–${session.end_page}`;
   const meta = [pagesLabel, formatWhen(session.ended_at), session.duration_seconds > 0 ? formatDuration(session.duration_seconds) : null]
     .filter(Boolean)
     .join(' · ');
@@ -123,7 +127,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
     body = (
       <div>
         <p style={{ margin: '0 0 12px', fontSize: '0.92rem', lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
-          Which pages did you read last time? The recap will be rewritten for them.
+          {unit === 'section' ? 'Which section did you start in? The recap will be rewritten up to your saved stopping place.' : 'Which pages did you read last time? The recap will be rewritten for them.'}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.92rem', color: 'var(--color-text-primary)' }}>
@@ -147,6 +151,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
               min={1}
               max={maxEditablePage}
               value={toInput}
+              disabled={unit === 'section'}
               onChange={(e) => setToInput(e.target.value)}
               style={inputStyle}
               aria-label="Last page read"
@@ -157,7 +162,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
           role={editError ? 'alert' : undefined}
           style={{ margin: '8px 0 0', fontSize: '0.8rem', color: editError ? 'var(--color-error)' : 'var(--color-text-muted)' }}
         >
-          {editError ?? `You've reached page ${maxEditablePage}.`}
+          {editError ?? (unit === 'section' ? 'Your stopping section is fixed to avoid including unread text.' : `You've reached page ${maxEditablePage}.`)}
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
           <button type="button" onClick={() => setEditing(false)} style={quietButton}>
@@ -181,7 +186,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
         {session.recap}
       </p>
     );
-  } else if (isGenerating || !session.recap_error) {
+  } else if (isGenerating) {
     body = (
       <div aria-busy="true">
         <div className="memory-bridge-skeleton" style={{ width: '100%' }} />
@@ -196,7 +201,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
     body = (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
         <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.5, color: 'var(--color-text-secondary)' }}>
-          Couldn't recall this session right now.
+          {session.recap_error ?? 'This recap is not ready yet.'}
         </p>
         <button
           type="button"
@@ -295,7 +300,7 @@ export const MemoryBridgeCard: React.FC<MemoryBridgeCardProps> = ({
             }}
           >
             <button type="button" onClick={() => setEditing(true)} style={quietButton}>
-              Not the right pages?
+              {unit === 'section' ? 'Wrong starting section?' : 'Not the right pages?'}
             </button>
             <button
               type="button"

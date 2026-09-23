@@ -131,6 +131,8 @@ export interface ReadingSession {
    *  Lets the recap spoiler guard stop extraction exactly where the reader stopped instead of
    *  including the rest of a chapter they never read. */
   end_cfi?: string | null;
+  /** EPUB only: where this session began within start_page. */
+  start_cfi?: string | null;
   // Local-only (not database columns)
   recap_error?: string | null;
   recap_error_code?: string | null; // decides whether a failed recap is retried automatically

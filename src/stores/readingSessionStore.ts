@@ -8,11 +8,12 @@ import { extractEpubTextRange } from '../services/epubTextExtractor';
 import { isTransientRecapError, requestSessionRecap, RecapErrorCode } from '../services/geminiRecapService';
 import { getBookSignedUrl } from '../services/bookService';
 import { BookFormat } from '../types/book';
+import { EpubCFI } from 'epubjs';
 
 const LOCAL_STORAGE_KEY = 'kin_reading_sessions_cache';
 
 const REMOTE_COLUMNS =
-  'id,user_id,book_id,started_at,ended_at,start_page,end_page,duration_seconds,pages_read,is_meaningful,recap,recap_generated_at,recap_viewed_at,end_cfi,created_at,updated_at';
+  'id,user_id,book_id,started_at,ended_at,start_page,end_page,duration_seconds,pages_read,is_meaningful,recap,recap_generated_at,recap_viewed_at,start_cfi,end_cfi,created_at,updated_at';
 
 export interface RecapBookSource {
   filePath: string;
@@ -28,12 +29,11 @@ interface ReadingSessionState {
   generatingIds: Record<string, boolean>;
 
   fetchSessions: (bookId: string) => Promise<ReadingSession[]>;
-  getFrontier: (bookId: string) => number;
-  /** Records a finished session. Local persistence is synchronous; the remote write follows.
-   *  `endCfi` (EPUB only): the precise position reached within end_page, for the recap spoiler guard. */
-  saveFinishedSession: (draft: SessionDraft, endCfi?: string | null) => ReadingSession;
+  getFrontier: (bookId: string, endPage?: number | null, endCfi?: string | null) => number;
+  /** Records a finished session. Local persistence is synchronous; the remote write follows. */
+  saveFinishedSession: (draft: SessionDraft) => ReadingSession;
   /** Manual correction. Clamped to [1, maxPage]; a changed range invalidates the recap. */
-  updateSessionBoundaries: (sessionId: string, startPage: number, endPage: number, maxPage: number) => Promise<ReadingSession | null>;
+  updateSessionBoundaries: (sessionId: string, startPage: number, endPage: number, maxPage: number, format: BookFormat) => Promise<ReadingSession | null>;
   generateRecap: (sessionId: string, book: RecapBookSource, options?: { force?: boolean }) => Promise<RecapOutcome>;
   markRecapViewed: (sessionId: string) => void;
   deleteSession: (sessionId: string) => Promise<void>;
@@ -79,6 +79,7 @@ function toRemoteRow(s: ReadingSession, userId: string) {
     recap: s.recap,
     recap_generated_at: s.recap_generated_at,
     recap_viewed_at: s.recap_viewed_at,
+    start_cfi: s.start_cfi ?? null,
     end_cfi: s.end_cfi ?? null,
     updated_at: s.updated_at,
   };
@@ -117,23 +118,42 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
     set({ generatingIds: next });
   };
 
-  const syncSession = async (sessionId: string): Promise<boolean> => {
-    const session = find(sessionId);
-    if (!session || !isLiveUser()) return false;
+  const syncing = new Map<string, Promise<boolean>>();
+  const performSync = async (sessionId: string): Promise<boolean> => {
+    if (!isLiveUser()) return false;
     try {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user.id;
       if (!userId) return false;
-      const { error } = await supabase.from('reading_sessions').upsert(toRemoteRow(session, userId));
-      if (error) {
-        console.warn('Reading session not synced yet (will retry):', error.message);
-        return false;
+      // A boundary edit may land while an earlier upsert is in flight. Keep syncing the latest
+      // local version instead of clearing its pending flag after the stale write completes.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const session = find(sessionId);
+        if (!session) return false;
+        const snapshot = JSON.stringify(toRemoteRow(session, userId));
+        const { error } = await supabase.from('reading_sessions').upsert(toRemoteRow(session, userId));
+        if (error) {
+          console.warn('Reading session not synced yet (will retry):', error.message);
+          return false;
+        }
+        const latest = find(sessionId);
+        if (!latest) return false;
+        if (JSON.stringify(toRemoteRow(latest, userId)) === snapshot) {
+          patch(sessionId, { sync_pending: false });
+          return true;
+        }
       }
-      patch(sessionId, { sync_pending: false });
-      return true;
+      return false;
     } catch {
       return false;
     }
+  };
+  const syncSession = (sessionId: string): Promise<boolean> => {
+    const existing = syncing.get(sessionId);
+    if (existing) return existing;
+    const promise = performSync(sessionId).finally(() => syncing.delete(sessionId));
+    syncing.set(sessionId, promise);
+    return promise;
   };
 
   return {
@@ -160,7 +180,12 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         const merged: ReadingSession[] = (data as ReadingSession[]).map((row) => {
           serverIds.add(row.id);
           const mine = localById.get(row.id);
-          const sameRange = mine && mine.start_page === row.start_page && mine.end_page === row.end_page;
+          if (mine?.sync_pending) {
+            void syncSession(row.id);
+            return mine;
+          }
+          const sameRange = mine && mine.start_page === row.start_page && mine.end_page === row.end_page &&
+            (mine.start_cfi ?? null) === (row.start_cfi ?? null) && (mine.end_cfi ?? null) === (row.end_cfi ?? null);
           return {
             ...row,
             // Keep local knowledge the server may not have received yet.
@@ -168,6 +193,7 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
             recap_generated_at: row.recap_generated_at ?? (sameRange ? mine.recap_generated_at : null),
             recap_viewed_at: row.recap_viewed_at ?? mine?.recap_viewed_at ?? null,
             end_cfi: row.end_cfi ?? (sameRange ? mine.end_cfi : null) ?? null,
+            start_cfi: row.start_cfi ?? (sameRange ? mine.start_cfi : null) ?? null,
             recap_error: sameRange ? mine.recap_error ?? null : null,
             recap_error_code: sameRange ? mine.recap_error_code ?? null : null,
             sync_pending: false,
@@ -182,9 +208,21 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
       }
     },
 
-    getFrontier: (bookId) => computeFrontier(get().sessionsByBookId[bookId] ?? []),
+    getFrontier: (bookId, endPage, endCfi) => {
+      const sessions = get().sessionsByBookId[bookId] ?? [];
+      const frontier = computeFrontier(sessions);
+      if (!endCfi || endPage !== frontier) return frontier;
+      const furthest = sessions.filter((s) => s.is_meaningful && s.end_page === frontier);
+      if (furthest.length === 0 || furthest.some((s) => !s.end_cfi)) return frontier;
+      try {
+        const cfi = new EpubCFI();
+        return furthest.every((s) => cfi.compare(endCfi, s.end_cfi as string) > 0) ? frontier - 1 : frontier;
+      } catch {
+        return frontier;
+      }
+    },
 
-    saveFinishedSession: (draft, endCfi = null) => {
+    saveFinishedSession: (draft) => {
       const now = new Date().toISOString();
       const live = isLiveUser();
       const existing = find(draft.id);
@@ -204,7 +242,8 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         recap: rangeUnchanged ? existing.recap : null,
         recap_generated_at: rangeUnchanged ? existing.recap_generated_at : null,
         recap_viewed_at: rangeUnchanged ? existing.recap_viewed_at : null,
-        end_cfi: endCfi ?? (rangeUnchanged ? existing.end_cfi ?? null : null),
+        start_cfi: draft.startCfi ?? (rangeUnchanged ? existing.start_cfi ?? null : null),
+        end_cfi: draft.endCfi ?? (rangeUnchanged ? existing.end_cfi ?? null : null),
         recap_error: null,
         recap_error_code: null,
         created_at: existing?.created_at ?? now,
@@ -218,12 +257,13 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
       return session;
     },
 
-    updateSessionBoundaries: async (sessionId, startPage, endPage, maxPage) => {
+    updateSessionBoundaries: async (sessionId, startPage, endPage, maxPage, format) => {
       const current = find(sessionId);
       if (!current) return null;
       const start = Math.max(1, Math.floor(startPage));
       const end = Math.min(Math.floor(maxPage), Math.floor(endPage));
       if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return null;
+      if (format === 'epub' && end !== current.end_page) return null;
       if (start === current.start_page && end === current.end_page) return current;
 
       const now = new Date().toISOString();
@@ -237,7 +277,8 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         recap_generated_at: null,
         recap_viewed_at: null,
         // A manually corrected end page no longer matches wherever end_cfi pointed.
-        end_cfi: null,
+        end_cfi: format === 'epub' ? current.end_cfi ?? null : null,
+        start_cfi: format === 'epub' && start === current.start_page ? current.start_cfi ?? null : null,
         recap_error: null,
         recap_error_code: null,
         updated_at: now,
@@ -257,6 +298,8 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
             recap: null,
             recap_generated_at: null,
             recap_viewed_at: null,
+            start_cfi: format === 'epub' && start === current.start_page ? current.start_cfi ?? null : null,
+            end_cfi: format === 'epub' ? current.end_cfi ?? null : null,
             updated_at: now,
           })
           .eq('id', sessionId);
@@ -274,10 +317,11 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
       if (!options.force && priorCode && !isTransientRecapError(priorCode as RecapErrorCode)) return 'failed';
 
       const live = isLiveUser();
-      const { start_page, end_page } = session;
+      const { start_page, end_page, start_cfi, end_cfi } = session;
       const stillSameRange = () => {
         const current = find(sessionId);
-        return Boolean(current && current.start_page === start_page && current.end_page === end_page);
+        return Boolean(current && current.start_page === start_page && current.end_page === end_page &&
+          (current.start_cfi ?? null) === (start_cfi ?? null) && (current.end_cfi ?? null) === (end_cfi ?? null));
       };
       const fail = (code: string, message: string): RecapOutcome => {
         // Without an account the endpoint can never authorise; don't retry on every open.
@@ -303,7 +347,9 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         let extraction;
         try {
           extraction = book.format === 'epub'
-            ? await extractEpubTextRange(fileUrl, range.startPage, range.endPage, range.endPage === end_page ? session.end_cfi : null)
+            ? await extractEpubTextRange(fileUrl, range.startPage, range.endPage,
+                range.startPage === start_page ? session.start_cfi : null,
+                range.endPage === end_page ? session.end_cfi : null)
             : await extractPdfTextRange(fileUrl, range.startPage, range.endPage);
         } finally {
           if (fileUrl.startsWith('blob:') && fileUrl !== book.filePath) URL.revokeObjectURL(fileUrl);
@@ -319,6 +365,9 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
             author: book.author,
             startPage: range.startPage,
             endPage: range.endPage,
+            format: book.format,
+            startCfi: book.format === 'epub' ? start_cfi : null,
+            endCfi: book.format === 'epub' ? end_cfi : null,
             pages: extraction.pages,
           },
           accessToken
@@ -330,6 +379,20 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
         if (!stillSameRange()) return 'skipped';
 
         const generatedAt = result.generatedAt ?? new Date().toISOString();
+        if (live && !result.stored) {
+          let update = supabase
+            .from('reading_sessions')
+            .update({ recap: result.recap, recap_generated_at: generatedAt, updated_at: generatedAt })
+            .eq('id', sessionId)
+            .eq('start_page', start_page)
+            .eq('end_page', end_page);
+          update = start_cfi ? update.eq('start_cfi', start_cfi) : update.is('start_cfi', null);
+          update = end_cfi ? update.eq('end_cfi', end_cfi) : update.is('end_cfi', null);
+          const { data, error } = await update.select('id');
+          if (error || data?.length !== 1) {
+            return fail('network', 'Could not save this recap. Please try again.');
+          }
+        }
         patch(sessionId, {
           recap: result.recap,
           recap_generated_at: generatedAt,
@@ -337,14 +400,6 @@ export const useReadingSessionStore = create<ReadingSessionState>((set, get) => 
           recap_error_code: null,
           updated_at: generatedAt,
         });
-        if (live && !result.stored) {
-          await supabase
-            .from('reading_sessions')
-            .update({ recap: result.recap, recap_generated_at: generatedAt, updated_at: generatedAt })
-            .eq('id', sessionId)
-            .eq('start_page', start_page)
-            .eq('end_page', end_page);
-        }
         return 'ready';
       } catch (err) {
         console.warn('Recap generation failed:', err);

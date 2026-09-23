@@ -529,6 +529,19 @@ ALTER TABLE books
   ADD COLUMN IF NOT EXISTS format TEXT NOT NULL DEFAULT 'pdf' CHECK (format IN ('pdf', 'epub'));
 
 -- ============================================================
+-- Migrations 012-013: Precise EPUB reading positions
+-- ============================================================
+ALTER TABLE reading_progress ADD COLUMN IF NOT EXISTS epub_cfi TEXT;
+ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS epub_cfi TEXT;
+ALTER TABLE reading_sessions ADD COLUMN IF NOT EXISTS end_cfi TEXT;
+ALTER TABLE reading_sessions ADD COLUMN IF NOT EXISTS start_cfi TEXT;
+
+UPDATE storage.buckets
+SET file_size_limit = 26214400,
+    allowed_mime_types = ARRAY['application/pdf', 'application/epub+zip']
+WHERE id = 'user-books';
+
+-- ============================================================
 -- SETUP COMPLETE! All tables, indexes, RLS policies, and storage
 -- buckets are now configured for Kin Studio.
 -- ============================================================

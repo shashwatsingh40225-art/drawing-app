@@ -28,6 +28,9 @@ export interface RecapPayload {
   author: string;
   startPage: number;
   endPage: number;
+  format: 'pdf' | 'epub';
+  startCfi?: string | null;
+  endCfi?: string | null;
   pages: RecapPage[];
 }
 
@@ -48,19 +51,15 @@ export type RecapErrorCode =
   | 'insufficient_content'
   | 'unavailable';
 
-// gemini-flash-lite-latest has the best free-tier headroom (15 RPM / 1,000 RPD vs. 2.5-flash's
-// 10 RPM / ~250-500 RPD as of 2026-09) and was verified live against the current key/project;
-// gemini-2.5-flash is the quality fallback if the lite alias ever moves somewhere worse.
-export const DEFAULT_GEMINI_MODELS = ['gemini-flash-lite-latest', 'gemini-2.5-flash'];
-// meta/llama-3.3-70b-instruct, meta/llama-3.1-8b-instruct and mistralai/mixtral-8x22b-instruct-v0.1
-// all reached end-of-life on NVIDIA NIM (HTTP 410) as of 2026-09; replaced with models confirmed
-// live against the account's current NVIDIA_API_KEY.
+// Current stable Flash models. Provider/model overrides remain available through environment vars.
+export const DEFAULT_GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash'];
 export const DEFAULT_NVIDIA_MODELS = ['nvidia/nemotron-3-super-120b-a12b', 'openai/gpt-oss-20b'];
 export const INSUFFICIENT_CONTENT = 'INSUFFICIENT_CONTENT';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
-const GEMINI_TIMEOUT_MS = 25_000;
+const GEMINI_TIMEOUT_MS = 10_000;
+const NVIDIA_TIMEOUT_MS = 15_000;
 const MAX_SESSION_PAGES = 150;
 const MAX_PAGE_CHARS = 8_000;
 const MAX_EXCERPT_CHARS = 30_000;
@@ -99,6 +98,7 @@ export function parsePayload(body: unknown): { ok: true; value: RecapPayload } |
   if (!b || typeof b !== 'object') return { ok: false, error: 'Expected a JSON object.' };
   if (typeof b.sessionId !== 'string' || !UUID_RE.test(b.sessionId)) return { ok: false, error: 'Invalid session id.' };
   if (!Number.isInteger(b.startPage) || !Number.isInteger(b.endPage)) return { ok: false, error: 'Invalid page range.' };
+  if (b.format !== undefined && b.format !== 'pdf' && b.format !== 'epub') return { ok: false, error: 'Invalid book format.' };
   const startPage = b.startPage as number;
   const endPage = b.endPage as number;
   if (startPage < 1 || endPage < startPage || endPage - startPage + 1 > MAX_SESSION_PAGES) {
@@ -106,6 +106,13 @@ export function parsePayload(body: unknown): { ok: true; value: RecapPayload } |
   }
   if (!Array.isArray(b.pages) || b.pages.length === 0 || b.pages.length > MAX_SESSION_PAGES) {
     return { ok: false, error: 'Missing page text.' };
+  }
+  if ((b.startCfi != null && (typeof b.startCfi !== 'string' || b.startCfi.length > 2048)) ||
+      (b.endCfi != null && (typeof b.endCfi !== 'string' || b.endCfi.length > 2048))) {
+    return { ok: false, error: 'Invalid reading position.' };
+  }
+  if (b.format === 'epub' && !b.endCfi) {
+    return { ok: false, error: 'An EPUB recap needs a precise stopping place.' };
   }
 
   const seen = new Set<number>();
@@ -134,13 +141,17 @@ export function parsePayload(body: unknown): { ok: true; value: RecapPayload } |
       author: typeof b.author === 'string' ? b.author.slice(0, 200) : '',
       startPage,
       endPage,
+      format: b.format ?? 'pdf',
+      startCfi: b.startCfi ?? null,
+      endCfi: b.endCfi ?? null,
       pages,
     },
   };
 }
 
 /** Joins page texts in order; over budget, trims each page (keeping the last pages fuller). */
-export function buildExcerpt(pages: RecapPage[], budget = MAX_EXCERPT_CHARS): string {
+export function buildExcerpt(pages: RecapPage[], budget = MAX_EXCERPT_CHARS, format: 'pdf' | 'epub' = 'pdf'): string {
+  const label = format === 'epub' ? 'section' : 'p.';
   const usable = pages
     .map((p) => ({ pageNumber: p.pageNumber, text: p.text.trim() }))
     .filter((p) => p.text.length > 0)
@@ -149,7 +160,7 @@ export function buildExcerpt(pages: RecapPage[], budget = MAX_EXCERPT_CHARS): st
 
   const total = usable.reduce((n, p) => n + p.text.length, 0);
   if (total <= budget) {
-    return usable.map((p) => `[p. ${p.pageNumber}]\n${p.text}`).join('\n\n');
+    return usable.map((p) => `[${label} ${p.pageNumber}]\n${p.text}`).join('\n\n');
   }
 
   // Where the reader stopped matters most for continuity, so the final pages get double weight.
@@ -162,16 +173,20 @@ export function buildExcerpt(pages: RecapPage[], budget = MAX_EXCERPT_CHARS): st
         p.text.length <= allowance
           ? p.text
           : `${p.text.slice(0, Math.floor(allowance * 0.6))} … ${p.text.slice(p.text.length - Math.floor(allowance * 0.4))}`;
-      return `[p. ${p.pageNumber}]\n${body}`;
+      return `[${label} ${p.pageNumber}]\n${body}`;
     })
     .join('\n\n');
 }
 
 export function buildUserPrompt(payload: RecapPayload, excerpt: string): string {
   const byline = payload.author ? ` by ${payload.author}` : '';
+  const unit = payload.format === 'epub' ? 'sections' : 'pages';
+  const boundary = payload.format === 'epub'
+    ? 'and it ends where they stopped'
+    : 'and it ends on the last page they read';
   return [
     `Book: "${payload.bookTitle || 'Untitled'}"${byline}`,
-    `The reader's last session covered pages ${payload.startPage}–${payload.endPage}. The excerpt below is the text of those pages, in order, and it ends where they stopped.`,
+    `The reader's last session covered ${unit} ${payload.startPage}–${payload.endPage}. The excerpt below is the text they saw in those ${unit}, in order, ${boundary}.`,
     '',
     '<excerpt>',
     excerpt,
@@ -190,7 +205,7 @@ export function cleanRecapText(raw: string, truncated = false): string | null {
     .replace(/^#{1,6}\s+.*$/gm, '')
     .replace(/\*\*|__|`/g, '')
     .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
-    .replace(/^\s*previously\s*(?:…|\.\.\.|:)\s*/i, '')
+    .replace(/^\s*previously\s*(?:…|\.\.\.|[:,])\s*/i, '')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -318,7 +333,7 @@ async function callNvidia(
 
   for (const model of models) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), NVIDIA_TIMEOUT_MS);
     let res: Response;
     try {
       res = await fetchImpl(`${baseUrl}/chat/completions`, {
@@ -331,7 +346,9 @@ async function callNvidia(
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.3,
-          max_tokens: 2048,
+          max_tokens: model === DEFAULT_NVIDIA_MODELS[0] ? 512 : 768,
+          ...(model === DEFAULT_NVIDIA_MODELS[0] ? { reasoning_effort: 'none' } :
+            model === DEFAULT_NVIDIA_MODELS[1] ? { reasoning_effort: 'low' } : {}),
         }),
         signal: controller.signal,
       });
@@ -395,6 +412,8 @@ interface SessionRow {
   book_id: string;
   start_page: number;
   end_page: number;
+  start_cfi?: string | null;
+  end_cfi?: string | null;
 }
 
 async function loadOwnedSession(
@@ -413,7 +432,7 @@ async function loadOwnedSession(
   const sessionRes = await supabaseRequest(
     cfg,
     token,
-    `/rest/v1/reading_sessions?id=eq.${sessionId}&select=id,user_id,book_id,start_page,end_page`,
+    `/rest/v1/reading_sessions?id=eq.${sessionId}&select=id,user_id,book_id,start_page,end_page,start_cfi,end_cfi`,
     fetchImpl
   );
   if (!sessionRes.ok) return notFound;
@@ -445,15 +464,17 @@ async function storeRecap(
     const res = await supabaseRequest(
       cfg,
       token,
-      `/rest/v1/reading_sessions?id=eq.${row.id}&start_page=eq.${row.start_page}&end_page=eq.${row.end_page}`,
+      `/rest/v1/reading_sessions?id=eq.${row.id}&start_page=eq.${row.start_page}&end_page=eq.${row.end_page}&start_cfi=${row.start_cfi ? `eq.${encodeURIComponent(row.start_cfi)}` : 'is.null'}&end_cfi=${row.end_cfi ? `eq.${encodeURIComponent(row.end_cfi)}` : 'is.null'}&select=id`,
       fetchImpl,
       {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
         body: JSON.stringify({ recap, recap_generated_at: generatedAt, updated_at: generatedAt }),
       }
     );
-    return res.ok;
+    if (!res.ok) return false;
+    const rows = (await res.json().catch(() => [])) as { id?: string }[];
+    return rows.length === 1 && rows[0]?.id === row.id;
   } catch {
     return false;
   }
@@ -504,12 +525,16 @@ export async function handleRecapRequest(request: Request, opts: RecapHandlerOpt
     if (payload.startPage < result.row.start_page || payload.endPage > result.row.end_page) {
       return json(400, { code: 'invalid_request', error: 'Pages outside the reading session.' });
     }
+    if ((result.row.start_cfi ?? null) !== (payload.startCfi ?? null) ||
+        (result.row.end_cfi ?? null) !== (payload.endCfi ?? null)) {
+      return json(400, { code: 'invalid_request', error: 'Reading position changed. Try the recap again.' });
+    }
     owned = { cfg, row: result.row };
   } else if (!opts.allowAnonymous) {
     return json(401, { code: 'unauthenticated', error: 'Sign in to see recaps.' });
   }
 
-  const excerpt = buildExcerpt(payload.pages);
+  const excerpt = buildExcerpt(payload.pages, MAX_EXCERPT_CHARS, payload.format);
   if (excerpt.length < MIN_EXCERPT_CHARS) {
     return json(422, { code: 'insufficient_content', error: 'Not enough readable text on these pages for a recap.' });
   }

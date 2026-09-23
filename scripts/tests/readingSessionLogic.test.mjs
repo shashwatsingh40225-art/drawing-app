@@ -69,6 +69,46 @@ test('Scenario A: a few pages then leaving is history, not a recap', () => {
   assert.equal(draft.isMeaningful, false);
 });
 
+test('EPUB screens within one section qualify and preserve exact recap bounds', () => {
+  const r = reader('epub', 4);
+  for (let page = 1; page <= 3; page++) {
+    r.state = L.recordEpubScreen(r.state, 4, `start-${page}`, `end-${page}`, r.now);
+    r.stay(45);
+  }
+  const draft = r.close();
+  assert.equal(draft.startPage, 4);
+  assert.equal(draft.endPage, 4);
+  assert.equal(draft.isMeaningful, true);
+  assert.equal(draft.startCfi, 'start-1');
+  assert.equal(draft.endCfi, 'end-3');
+});
+
+test('EPUB glances do not widen the recap to unread text', () => {
+  const r = reader('epub', 4);
+  r.state = L.recordEpubScreen(r.state, 4, 'glance-start', 'glance-end', r.now);
+  r.stay(2);
+  for (let page = 1; page <= 3; page++) {
+    r.state = L.recordEpubScreen(r.state, 4, `read-start-${page}`, `read-end-${page}`, r.now);
+    r.stay(45);
+  }
+  r.state = L.recordEpubScreen(r.state, 4, 'unread-start', 'unread-end', r.now);
+  r.stay(2);
+  const draft = r.close();
+  assert.equal(draft.isMeaningful, true);
+  assert.equal(draft.startCfi, 'read-start-1');
+  assert.equal(draft.endCfi, 'read-end-3');
+});
+
+test('EPUB quick page flips do not count as three read screens', () => {
+  const r = reader('epub', 4);
+  for (let page = 1; page <= 4; page++) {
+    r.state = L.recordEpubScreen(r.state, 4, `start-${page}`, `end-${page}`, r.now);
+    r.stay(2);
+  }
+  r.stay(118);
+  assert.equal(r.close().isMeaningful, false);
+});
+
 test('Scenario B: pages 1–40 is a meaningful session covering exactly 1–40', () => {
   const r = reader('b', 1);
   r.read(1, 40, 45);

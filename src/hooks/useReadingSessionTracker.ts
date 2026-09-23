@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   SessionDraft,
   TrackerState,
@@ -9,6 +9,7 @@ import {
   createTracker,
   isTrackerState,
   resumeAfterHidden,
+  recordEpubScreen,
   tick,
 } from '../services/readingSessionLogic';
 
@@ -20,7 +21,7 @@ interface Options {
   /** Track only while the document is actually on screen. */
   enabled: boolean;
   /** Furthest page covered by this book's earlier meaningful sessions. */
-  getFrontier: (bookId: string) => number;
+  getFrontier: (bookId: string, endPage?: number | null, endCfi?: string | null) => number;
   /** Must persist the draft synchronously (e.g. localStorage) before returning. */
   onSessionClosed: (draft: SessionDraft, reason: SessionCloseReason) => void;
   onHidden?: () => void;
@@ -87,7 +88,7 @@ export function useReadingSessionTracker({ bookId, currentPage, enabled, getFron
     if (!enabled || !bookId) return;
 
     const finish = (state: TrackerState, reason: SessionCloseReason) => {
-      const draft = closeTracker(state, callbacksRef.current.getFrontier(state.bookId));
+      const draft = closeTracker(state, callbacksRef.current.getFrontier(state.bookId, state.readEnd, state.epubEndCfi));
       if (draft) callbacksRef.current.onSessionClosed(draft, reason);
     };
     const checkpoint = (state: TrackerState, now: number) => {
@@ -204,11 +205,31 @@ export function useReadingSessionTracker({ bookId, currentPage, enabled, getFron
     const now = Date.now();
     const moved = changePage(tick(s, now, isVisible()), currentPage, now, newSessionId);
     if (moved.closed) {
-      const draft = closeTracker(moved.closed, callbacksRef.current.getFrontier(moved.closed.bookId));
+      const draft = closeTracker(moved.closed, callbacksRef.current.getFrontier(moved.closed.bookId, moved.closed.readEnd, moved.closed.epubEndCfi));
       if (draft) callbacksRef.current.onSessionClosed(draft, 'jump');
     }
     stateRef.current = moved.state;
     writeCheckpoint(moved.state);
     lastCheckpointRef.current = now;
   }, [currentPage]);
+
+  const onEpubLocation = useCallback((section: number, startCfi: string, endCfi: string) => {
+    const state = stateRef.current;
+    if (!state) return;
+    const now = Date.now();
+    let next = state;
+    if (section !== state.currentPage) {
+      const moved = changePage(tick(state, now, isVisible()), section, now, newSessionId);
+      if (moved.closed) {
+        const draft = closeTracker(moved.closed, callbacksRef.current.getFrontier(moved.closed.bookId, moved.closed.readEnd, moved.closed.epubEndCfi));
+        if (draft) callbacksRef.current.onSessionClosed(draft, 'jump');
+      }
+      next = moved.state;
+    }
+    stateRef.current = recordEpubScreen(next, section, startCfi, endCfi, now);
+    writeCheckpoint(stateRef.current);
+    lastCheckpointRef.current = now;
+  }, []);
+
+  return { onEpubLocation };
 }

@@ -34,12 +34,12 @@ function failure(error: string): ExtractedRangeResult {
  * Returns '' for a document the browser's XML parser failed on (a `<parsererror>` node) rather
  * than forwarding that parser-error text as if it were book content.
  */
-function extractReadableText(doc: Document): string {
+function extractReadableText(doc: Document, source?: Node): string {
   if (doc.getElementsByTagName('parsererror').length > 0) return '';
-  const root = doc.body || doc.documentElement;
+  const root = source ?? doc.body ?? doc.documentElement;
   if (!root) return '';
 
-  const clone = root.cloneNode(true) as Element;
+  const clone = root.cloneNode(true) as Element | DocumentFragment;
   clone.querySelectorAll('style, script').forEach((el) => el.remove());
 
   const walker = doc.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT);
@@ -54,59 +54,44 @@ function extractReadableText(doc: Document): string {
 }
 
 /**
- * Extracts text only up to a CFI position within a section — used to cut the final section of a
- * recap range off exactly where the reader stopped, instead of including the rest of the chapter
- * they never read. Returns null (caller falls back to the full section) if the CFI doesn't
- * resolve against this document.
+ * Restricts a section to the reader's known CFI boundaries. An invalid boundary returns null
+ * so the caller can fail safely instead of including unread text.
  */
-function extractTextUpToCfi(doc: Document, cfiStr: string): string | null {
-  let range: Range;
-  try {
-    range = new EpubCFI(cfiStr).toRange(doc);
-  } catch {
-    return null;
-  }
-  if (!range) return null;
-
+function extractTextBetweenCfis(
+  doc: Document,
+  sectionNumber: number,
+  startCfi?: string | null,
+  endCfi?: string | null
+): string | null {
   const root = doc.body || doc.documentElement;
   if (!root) return null;
-
-  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(n: Node) {
-      const parent = n.parentElement;
-      if (parent && (parent.tagName === 'STYLE' || parent.tagName === 'SCRIPT')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-
-  let result = '';
-  let node: Node | null;
   try {
-    while ((node = walker.nextNode())) {
-      if (node === range.endContainer) {
-        result += (node.textContent || '').slice(0, range.endOffset);
-        break;
-      }
-      // `range.endContainer` is frequently an Element (a `<p>` or `<div>`), which this walker
-      // (SHOW_TEXT only) never visits, so it never equals `node` above — `compareDocumentPosition`
-      // against that element then reports DOCUMENT_POSITION_CONTAINS for the element's own text
-      // children, which has no DOCUMENT_POSITION_FOLLOWING bit set, so the very first text node
-      // used to break out immediately and return ''. `comparePoint` instead places this node's
-      // own end directly against the CFI position itself, correctly regardless of what kind of
-      // node that position's container happens to be.
-      const pastEnd = range.comparePoint(node, node.textContent?.length ?? 0) > 0;
-      if (!pastEnd) {
-        result += node.textContent || '';
-      } else {
-        break;
-      }
+    const point = (cfi: string) => {
+      const parsed = new EpubCFI(cfi);
+      if (parsed.spinePos !== sectionNumber - 1) throw new Error('CFI belongs to another section');
+      const resolved = parsed.toRange(doc);
+      if (!resolved) throw new Error('CFI could not be resolved');
+      return resolved;
+    };
+    if (startCfi && endCfi && new EpubCFI().compare(startCfi, endCfi) > 0) return null;
+    const range = doc.createRange();
+    range.selectNodeContents(root);
+    if (startCfi) {
+      const start = point(startCfi);
+      if (!root.contains(start.startContainer)) return null;
+      range.setStart(start.startContainer, start.startOffset);
     }
+    if (endCfi) {
+      const end = point(endCfi);
+      if (!root.contains(end.endContainer)) return null;
+      range.setEnd(end.endContainer, end.endOffset);
+    }
+    if (range.collapsed) return '';
+    return extractReadableText(doc, range.cloneContents());
   } catch {
-    // comparePoint throws if the CFI resolved a point outside this document's tree — fall back
-    // to the full section rather than returning a silently truncated recap.
+    // An invalid stop CFI must never reveal the unread remainder of the chapter.
     return null;
   }
-  return result;
 }
 
 /**
@@ -115,21 +100,22 @@ function extractTextUpToCfi(doc: Document, cfiStr: string): string | null {
  * EPUB has no fixed page like a PDF, so a "page" here is one spine item (chapter/section) —
  * the book's own natural, stable unit, 1-indexed to line up with how pages are numbered
  * everywhere else in the app. This is coarser than a PDF page, but the spoiler guard is just
- * as structural: a spine item beyond `endSection` is never loaded, so nothing past it can
- * reach a recap. The one caveat (shared with the PDF extractor, which also always includes the
- * full text of the last page even if the reader stopped partway down it) is that a very long
- * final chapter is included in full even if the reader only read part of it.
+ * as structural: a spine item beyond `endSection` is never loaded. When known, CFIs further
+ * restrict the first and last sections to the content actually seen by the reader.
  */
 export async function extractEpubTextRange(
   fileUrl: string,
   startSection: number,
   endSection: number,
-  /** Precise stop position within endSection, if known — see extractTextUpToCfi. */
+  /** Precise start position within startSection, if known. */
+  startCfi?: string | null,
+  /** Precise stop position within endSection. Required for spoiler-safe recaps. */
   endCfi?: string | null
 ): Promise<ExtractedRangeResult> {
   if (!Number.isInteger(startSection) || !Number.isInteger(endSection) || startSection < 1 || endSection < startSection) {
     return failure('Invalid section range.');
   }
+  if (!endCfi) return failure('This session has no precise stopping place. Reopen the book and read a little more before requesting a recap.');
 
   // epub.js's own URL-fetching (ePub(url)) silently hangs forever on a blob: URL (our IndexedDB
   // demo-mode cache path) and is extension-sniffed for everything else — fetching the bytes
@@ -152,29 +138,39 @@ export async function extractEpubTextRange(
     const total = (book.spine as unknown as { length: number }).length ?? 0;
     if (total === 0) return failure('This book has no readable sections.');
     if (startSection > total) return failure('These pages are outside the document.');
-    const lastSection = Math.min(endSection, total);
+    if (endSection > total) return failure('These pages are outside the document.');
+    const lastSection = endSection;
 
     const pages: ExtractedPageText[] = [];
     for (let sectionNumber = startSection; sectionNumber <= lastSection; sectionNumber++) {
       const section = book.spine.get(sectionNumber - 1); // spine is 0-indexed internally
-      if (!section) continue;
+      if (!section) return failure('Could not find one of the sections in this session.');
       try {
-        const doc: Document = await section.load(book.load.bind(book));
-        let raw: string | null = null;
-        if (sectionNumber === lastSection && endCfi) {
-          raw = extractTextUpToCfi(doc, endCfi);
+        // epub.js resolves Section.load() to the documentElement, despite its .d.ts claiming
+        // Document. The actual parsed Document lives on section.document.
+        await section.load(book.load.bind(book));
+        const doc = section.document;
+        if (!doc || doc.getElementsByTagName('parsererror').length > 0) {
+          return failure('Could not parse one of the sections in this session.');
         }
-        if (raw === null) raw = extractReadableText(doc);
-        const text = raw
+        const bounded = (sectionNumber === startSection && startCfi) || (sectionNumber === lastSection && endCfi);
+        const raw = bounded
+          ? extractTextBetweenCfis(doc, sectionNumber,
+              sectionNumber === startSection ? startCfi : null,
+              sectionNumber === lastSection ? endCfi : null)
+          : extractReadableText(doc);
+        if (raw === null) return failure('Could not verify the reading position for this chapter. Reopen the book and try again.');
+        const normalized = raw
           .replace(/[ \t]+/g, ' ')
           .replace(/\n\s*\n+/g, '\n')
-          .trim()
-          .slice(0, MAX_PAGE_CHARS);
+          .trim();
+        const text = sectionNumber === lastSection
+          ? normalized.slice(-MAX_PAGE_CHARS)
+          : normalized.slice(0, MAX_PAGE_CHARS);
         section.unload();
         pages.push({ pageNumber: sectionNumber, text });
       } catch {
-        // A single unreadable section (e.g. an embedded SVG cover page) shouldn't fail the whole range.
-        continue;
+        return failure('Could not read one of the sections in this session.');
       }
     }
 
